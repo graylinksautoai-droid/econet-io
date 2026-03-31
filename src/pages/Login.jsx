@@ -149,4 +149,77 @@ function Login({ user, onLogout, onNavigate }) {
   );
 }
 
+export default Login;import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+
+const Login = ({ onNavigate }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // In a real application, you would handle authentication here.
+    // For now, we'll just navigate to the dashboard.
+    console.log('Login attempt:', { email, password });
+    onNavigate('/dashboard');
+  };
+
+  const buttonStyles = {
+    backgroundColor: 'var(--color-brand-green)',
+    color: 'white',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '600',
+    border: 'none',
+    cursor: 'pointer',
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+      <motion.div
+        className="glass-ui p-8 rounded-lg shadow-lg w-full max-w-sm"
+        style={{ backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2" htmlFor="email">Email</label>
+            <input
+              type="email"
+              id="email"
+              className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2" htmlFor="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <motion.button
+            type="submit"
+            style={buttonStyles}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Log In
+          </motion.button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
 export default Login;
