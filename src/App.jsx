@@ -8,6 +8,31 @@ import EditProfile from "./pages/EditProfile";
 import { useState, useEffect } from "react";
 import UnifiedButton from "./components/UnifiedButton";
 import SentinelLive from "./components/SentinelLive";
+import ClimatePost from './components/ClimatePost';
+
+const dummyPosts = [
+  {
+    id: 1,
+    urgency: 'low',
+    message: 'Rainfall expected in Lagos, bring your umbrellas!',
+    location: 'Lagos',
+    timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+  },
+  {
+    id: 2,
+    urgency: 'medium',
+    message: 'Heatwave warning issued for Kano. Stay hydrated!',
+    location: 'Kano',
+    timestamp: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+  },
+  {
+    id: 3,
+    urgency: 'high',
+    message: 'Flash flood alert in Abuja. Seek higher ground immediately!',
+    location: 'Abuja',
+    timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+  },
+];
 
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
@@ -89,6 +114,22 @@ function App() {
           onStop={() => navigate('/')} 
           onNavigate={navigate} 
         />
+      )}
+      {/* Social Media Feed Section */}
+      {currentPath !== "/login" && currentPath !== "/register" && currentPath !== "/forgot-password" && (
+        <main className="p-4">
+          <div className="glass-ui max-w-md mx-auto">
+            {dummyPosts.map((post) => (
+              <ClimatePost
+                key={post.id}
+                urgency={post.urgency}
+                message={post.message}
+                location={post.location}
+                timestamp={post.timestamp}
+              />
+            ))}
+          </div>
+        </main>
       )}
     </>
   );
