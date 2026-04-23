@@ -1,12 +1,30 @@
-import { useState } from 'react';
-import MainLayout from '../layout/MainLayout';
+import React, { useState, useEffect } from 'react'; 
+import { useAuth } from '../context/AuthContext';
+import MainLayout from '../layouts/MainLayout';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 function Login({ user, onLogout, onNavigate }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useAuth();
+
+  // Load remembered credentials on mount
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('rememberedEmail');
+    const rememberedPassword = localStorage.getItem('rememberedPassword');
+    
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRemember(true);
+    }
+    if (rememberedPassword) {
+      setPassword(rememberedPassword);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,29 +32,29 @@ function Login({ user, onLogout, onNavigate }) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        if (remember) {
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-        } else {
-          sessionStorage.setItem('token', data.token);
-          sessionStorage.setItem('user', JSON.stringify(data.user));
-        }
-        window.location.href = '/';
+      console.log("Sending login request:", email);
+      
+      // Add visual feedback
+      console.log("Attempting login... Please wait.");
+      
+      const data = await login({ email, password }, { remember });
+      
+      console.log("Login successful:", data);
+      
+      // Handle remember me
+      if (remember) {
+        localStorage.setItem('rememberedEmail', email);
+        localStorage.setItem('rememberedPassword', password);
       } else {
-        setError(data.error || 'Login failed');
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
       }
+      
+      onNavigate('/');
+      
     } catch (err) {
-      console.error('Login fetch error:', err);
-      setError(err.message || 'Network error. Please try again.');
+      console.error("Login failed:", err);
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -46,11 +64,7 @@ function Login({ user, onLogout, onNavigate }) {
     <MainLayout user={user} onLogout={onLogout} onNavigate={onNavigate}>
       {/* Background Image with Overlay */}
       <div className="fixed inset-0 z-0">
-        <img
-          src="https://res.cloudinary.com/duuewjaib/image/upload/v1772721411/ChatGPT_Image_Mar_5_2026_03_28_26_PM_dlkg0v.png"
-          alt="Background"
-          className="w-full h-full object-cover"
-        />
+        <div className="w-full h-full bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/60"></div>
       </div>
 
@@ -78,19 +92,30 @@ function Login({ user, onLogout, onNavigate }) {
                   placeholder="Email address"
                 />
               </div>
-              <div>
+              <div className="relative">
                 <label htmlFor="password" className="sr-only">Password</label>
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-white/90"
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-white/90"
                   placeholder="Password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  {showPassword ? (
+                    <FaEyeSlash className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                  ) : (
+                    <FaEye className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -148,78 +173,5 @@ function Login({ user, onLogout, onNavigate }) {
     </MainLayout>
   );
 }
-
-export default Login;import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-
-const Login = ({ onNavigate }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // In a real application, you would handle authentication here.
-    // For now, we'll just navigate to the dashboard.
-    console.log('Login attempt:', { email, password });
-    onNavigate('/dashboard');
-  };
-
-  const buttonStyles = {
-    backgroundColor: 'var(--color-brand-green)',
-    color: 'white',
-    padding: '10px 20px',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    border: 'none',
-    cursor: 'pointer',
-  };
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      <motion.div
-        className="glass-ui p-8 rounded-lg shadow-lg w-full max-w-sm"
-        style={{ backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2" htmlFor="email">Email</label>
-            <input
-              type="email"
-              id="email"
-              className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2" htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <motion.button
-            type="submit"
-            style={buttonStyles}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Log In
-          </motion.button>
-        </form>
-      </motion.div>
-    </div>
-  );
-};
 
 export default Login;

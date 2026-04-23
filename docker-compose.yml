@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # Frontend Service
+  frontend:
+    build: .
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+    networks:
+      - econet-network
+
+  # Backend Service
+  backend:
+    build: ./server
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT}
+    volumes:
+      - ./server/uploads:/app/uploads
+    networks:
+      - econet-network
+    restart: unless-stopped
+
+  # MongoDB Service (optional - comment out if using external MongoDB)
+  # mongodb:
+  #   image: mongo:7
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+  #     - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+  #     - MONGO_INITDB_DATABASE=econet
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - econet-network
+
+  # Redis Service (optional - for caching)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - econet-network
+
+networks:
+  econet-network:
+    driver: bridge
+
+# volumes:
+#   mongodb_data:

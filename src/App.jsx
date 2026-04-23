@@ -1,3 +1,8 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { RegionalProvider } from "./context/RegionalContext.jsx";
+// Pages
 import Dashboard from "./pages/Dashboard";
 import SubmitReport from "./pages/SubmitReport";
 import Login from "./pages/Login";
@@ -5,51 +10,32 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Marketplace from "./pages/Marketplace";
 import EditProfile from "./pages/EditProfile";
-import { useState, useEffect } from "react";
+import Profile from "./pages/Profile";
+import CommandCenter from "./pages/CommandCenter";
+import AmberAlerts from "./pages/AmberAlerts"; 
+// Layout
+import MainLayout from "./layouts/MainLayout";
+// Components
 import UnifiedButton from "./components/UnifiedButton";
 import SentinelLive from "./components/SentinelLive";
 import ClimatePost from './components/ClimatePost';
+import LiloAI from './components/LiloAI';
 
 const dummyPosts = [
-  {
-    id: 1,
-    urgency: 'low',
-    message: 'Rainfall expected in Lagos, bring your umbrellas!',
-    location: 'Lagos',
-    timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-  },
-  {
-    id: 2,
-    urgency: 'medium',
-    message: 'Heatwave warning issued for Kano. Stay hydrated!',
-    location: 'Kano',
-    timestamp: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-  },
-  {
-    id: 3,
-    urgency: 'high',
-    message: 'Flash flood alert in Abuja. Seek higher ground immediately!',
-    location: 'Abuja',
-    timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-  },
+  { id: 1, urgency: 'low', message: 'Rainfall expected in Lagos!', location: 'Lagos', timestamp: new Date().toISOString() },
+  { id: 2, urgency: 'medium', message: 'Heatwave warning for Kano.', location: 'Kano', timestamp: new Date().toISOString() },
+  { id: 3, urgency: 'high', message: 'Flash flood alert in Abuja.', location: 'Abuja', timestamp: new Date().toISOString() },
 ];
 
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-  const [user, setUser] = useState(null);
   const [isLive, setIsLive] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
-      if (window.location.pathname === '/live') {
-        setIsLive(true);
-      } else {
-        setIsLive(false);
-      }
+      setIsLive(window.location.pathname === '/live');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -58,80 +44,79 @@ function App() {
   const navigate = (path) => {
     window.history.pushState({}, '', path);
     setCurrentPath(path);
-    if (path === '/live') {
-      setIsLive(true);
-    } else {
-      setIsLive(false);
-    }
+    setIsLive(path === '/live');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
+    localStorage.clear();
+    sessionStorage.clear();
     setUser(null);
     navigate('/login');
   };
 
   const renderContent = () => {
-    if (currentPath === "/login") {
-      return <Login user={user} onLogout={handleLogout} onNavigate={navigate} />;
+    switch (currentPath) {
+      case "/command":
+        return (
+          <MainLayout user={user} onLogout={handleLogout} onNavigate={navigate}>
+            <CommandCenter user={user} onLogout={handleLogout} onNavigate={navigate} />
+          </MainLayout>
+        );
+      case "/login":
+        return <Login user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      case "/register":
+        return <Register user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      case "/forgot-password":
+        return <ForgotPassword user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      case "/submit":
+        return <SubmitReport user={user} onNavigate={navigate} />;
+      case "/marketplace":
+        return <Marketplace user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      case "/edit-profile":
+        return <EditProfile user={user} onNavigate={navigate} />;
+      case "/profile":
+        return <Profile user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      case "/amber-alerts":
+        return <AmberAlerts user={user} onLogout={handleLogout} onNavigate={navigate} />;
+      default:
+        return <Dashboard user={user} onLogout={handleLogout} onNavigate={navigate} isCommandMode={false} />;
     }
-
-    if (currentPath === "/register") {
-      return <Register user={user} onLogout={handleLogout} onNavigate={navigate} />;
-    }
-
-    if (currentPath === "/forgot-password") {
-      return <ForgotPassword user={user} onLogout={handleLogout} onNavigate={navigate} />;
-    }
-
-    if (currentPath === "/submit") {
-      return <SubmitReport user={user} onNavigate={navigate} />;
-    }
-
-    if (currentPath === "/marketplace") {
-      return <Marketplace user={user} onLogout={handleLogout} onNavigate={navigate} />;
-    }
-
-    if (currentPath === "/edit-profile") {
-      return <EditProfile user={user} onNavigate={navigate} />;
-    }
-
-    return <Dashboard user={user} onLogout={handleLogout} onNavigate={navigate} />;
   };
 
+  const isAuthPage = ["/login", "/register", "/forgot-password"].includes(currentPath);
+  const isCommandPage = currentPath === "/command";
+
   return (
-    <>
-      {renderContent()}
-      {user && currentPath !== "/login" && currentPath !== "/register" && (
+    <ThemeProvider>
+      <RegionalProvider>
+        <div className="min-h-screen bg-primary">
+          {renderContent()}
+
+      {user && !isAuthPage && !isCommandPage && (
         <UnifiedButton onNavigate={navigate} />
       )}
+
       {isLive && (
-        <SentinelLive 
-          user={user} 
-          onStop={() => navigate('/')} 
-          onNavigate={navigate} 
-        />
+        <SentinelLive user={user} onStop={() => navigate('/')} onNavigate={navigate} />
       )}
-      {/* Social Media Feed Section */}
-      {currentPath !== "/login" && currentPath !== "/register" && currentPath !== "/forgot-password" && (
-        <main className="p-4">
-          <div className="glass-ui max-w-md mx-auto">
+
+      {(currentPath === "/" || currentPath === "") && (
+        <main className="p-4 pb-24 relative z-10">
+          <div className="max-w-md mx-auto space-y-4">
             {dummyPosts.map((post) => (
-              <ClimatePost
-                key={post.id}
-                urgency={post.urgency}
-                message={post.message}
-                location={post.location}
-                timestamp={post.timestamp}
-              />
+              <ClimatePost key={post.id} {...post} />
             ))}
           </div>
         </main>
       )}
-    </>
+
+      {/* LILO AI Assistant - Always visible when logged in */}
+      {user && !isAuthPage && (
+        <LiloAI position="floating" size="medium" />
+      )}
+        </div>
+      </RegionalProvider>
+    </ThemeProvider>
   );
 }
 

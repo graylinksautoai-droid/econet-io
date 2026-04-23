@@ -1,0 +1,254 @@
+{
+  "NG": {
+    "units": "metric",
+    "hazardTypes": ["flood", "fire", "drought", "oil_spill", "erosion", "deforestation", "pollution", "landslide"],
+    "authorities": [
+      {
+        "name": "National Emergency Management Agency",
+        "type": "emergency",
+        "contactAPI": "https://nema.gov.ng/api/incidents",
+        "phone": "+234-800-000-0000",
+        "email": "info@nema.gov.ng",
+        "responseTime": "15 minutes"
+      },
+      {
+        "name": "Federal Fire Service",
+        "type": "fire",
+        "contactAPI": "https://fireservice.gov.ng/api/reports",
+        "phone": "+234-800-000-0001",
+        "email": "info@fireservice.gov.ng",
+        "responseTime": "10 minutes"
+      },
+      {
+        "name": "Nigerian Meteorological Agency",
+        "type": "weather",
+        "contactAPI": "https://nimet.gov.ng/api/weather-alerts",
+        "phone": "+234-800-000-0002",
+        "email": "info@nimet.gov.ng",
+        "responseTime": "5 minutes"
+      },
+      {
+        "name": "National Oil Spill Detection and Response Agency",
+        "type": "environmental",
+        "contactAPI": "https://nosdra.gov.ng/api/spills",
+        "phone": "+234-800-000-0003",
+        "email": "info@nosdra.gov.ng",
+        "responseTime": "30 minutes"
+      },
+      {
+        "name": "National Environmental Standards and Regulations Enforcement Agency",
+        "type": "environmental",
+        "contactAPI": "https://nesrea.gov.ng/api/incidents",
+        "phone": "+234-800-000-0004",
+        "email": "info@nesrea.gov.ng",
+        "responseTime": "45 minutes"
+      },
+      {
+        "name": "Nigeria Police Force",
+        "type": "emergency",
+        "contactAPI": "https://npf.gov.ng/api/emergency",
+        "phone": "112",
+        "email": "emergency@npf.gov.ng",
+        "responseTime": "20 minutes"
+      }
+    ],
+    "ngos": [
+      {
+        "name": "Nigerian Conservation Foundation",
+        "type": "environmental",
+        "contact": "info@ncfnigeria.org",
+        "phone": "+234-800-000-0005",
+        "website": "https://ncfnigeria.org"
+      },
+      {
+        "name": "Climate and Sustainable Development Network",
+        "type": "climate",
+        "contact": "info@csdn.org.ng",
+        "phone": "+234-800-000-0006",
+        "website": "https://csdn.org.ng"
+      },
+      {
+        "name": "Environmental Rights Action/Friends of the Earth Nigeria",
+        "type": "environmental",
+        "contact": "info@eraction.org",
+        "phone": "+234-800-000-0007",
+        "website": "https://eraction.org"
+      },
+      {
+        "name": "Women Environmental Programme",
+        "type": "environmental",
+        "contact": "info@wepnigeria.org",
+        "phone": "+234-800-000-0008",
+        "website": "https://wepnigeria.org"
+      }
+    ],
+    "uiLabels": {
+      "temperature": "°C",
+      "distance": "km",
+      "speed": "km/h",
+      "pressure": "hPa",
+      "humidity": "%",
+      "wind": "Wind Speed",
+      "visibility": "Visibility",
+      "airQuality": "Air Quality Index"
+    },
+    "emergencyNumbers": ["112", "199", "767"],
+    "timezone": "Africa/Lagos",
+    "language": "en",
+    "currency": "NGN",
+    "population": "206,139,589"
+  },
+  "Kenya": {
+    "units": "metric",
+    "hazardTypes": ["flood", "fire", "drought", "landslide", "wildlife_conflict", "desertification"],
+    "authorities": [
+      {
+        "name": "National Disaster Management Authority",
+        "type": "emergency",
+        "contactAPI": "https://ndma.go.ke/api/incidents",
+        "phone": "+254-700-000-000"
+      },
+      {
+        "name": "Kenya Forest Service",
+        "type": "environmental",
+        "contactAPI": "https://kenyaforestservice.org/api/reports",
+        "phone": "+254-700-000-001"
+      },
+      {
+        "name": "Kenya Meteorological Department",
+        "type": "weather",
+        "contactAPI": "https://meteo.go.ke/api/alerts",
+        "phone": "+254-700-000-002"
+      }
+    ],
+    "ngos": [
+      {
+        "name": "Green Belt Movement",
+        "type": "environmental",
+        "contact": "info@greenbeltmovement.org",
+        "phone": "+254-700-000-003"
+      },
+      {
+        "name": "Climate Action Network Kenya",
+        "type": "climate",
+        "contact": "info@cankenya.org",
+        "phone": "+254-700-000-004"
+      }
+    ],
+    "uiLabels": {
+      "temperature": "°C",
+      "distance": "km",
+      "speed": "km/h",
+      "pressure": "hPa",
+      "humidity": "%",
+      "wind": "Wind Speed",
+      "visibility": "Visibility",
+      "airQuality": "Air Quality Index"
+    },
+    "emergencyNumbers": ["999", "112"],
+    "timezone": "Africa/Nairobi",
+    "language": "en"
+  },
+  "Ghana": {
+    "units": "metric",
+    "hazardTypes": ["flood", "fire", "drought", "coastal_erosion", "illegal_mining", "deforestation"],
+    "authorities": [
+      {
+        "name": "National Disaster Management Organisation",
+        "type": "emergency",
+        "contactAPI": "https://nadmo.gov.gh/api/incidents",
+        "phone": "+233-800-000-000"
+      },
+      {
+        "name": "Ghana National Fire Service",
+        "type": "fire",
+        "contactAPI": "https://fireservice.gov.gh/api/reports",
+        "phone": "+233-800-000-001"
+      },
+      {
+        "name": "Environmental Protection Agency",
+        "type": "environmental",
+        "contactAPI": "https://epa.gov.gh/api/incidents",
+        "phone": "+233-800-000-002"
+      }
+    ],
+    "ngos": [
+      {
+        "name": "Friends of the Earth Ghana",
+        "type": "environmental",
+        "contact": "info@foeghana.org",
+        "phone": "+233-800-000-003"
+      },
+      {
+        "name": "Ghana Climate Innovation Centre",
+        "type": "climate",
+        "contact": "info@ghanacic.org",
+        "phone": "+233-800-000-004"
+      }
+    ],
+    "uiLabels": {
+      "temperature": "°C",
+      "distance": "km",
+      "speed": "km/h",
+      "pressure": "hPa",
+      "humidity": "%",
+      "wind": "Wind Speed",
+      "visibility": "Visibility",
+      "airQuality": "Air Quality Index"
+    },
+    "emergencyNumbers": ["112", "193"],
+    "timezone": "Africa/Accra",
+    "language": "en"
+  },
+  "United States": {
+    "units": "imperial",
+    "hazardTypes": ["flood", "fire", "hurricane", "tornado", "earthquake", "wildfire"],
+    "authorities": [
+      {
+        "name": "Federal Emergency Management Agency",
+        "type": "emergency",
+        "contactAPI": "https://fema.gov/api/incidents",
+        "phone": "1-800-621-3362"
+      },
+      {
+        "name": "Environmental Protection Agency",
+        "type": "environmental",
+        "contactAPI": "https://epa.gov/api/incidents",
+        "phone": "1-800-424-8802"
+      },
+      {
+        "name": "National Weather Service",
+        "type": "weather",
+        "contactAPI": "https://weather.gov/api/alerts",
+        "phone": "1-800-621-7637"
+      }
+    ],
+    "ngos": [
+      {
+        "name": "Environmental Defense Fund",
+        "type": "environmental",
+        "contact": "info@edf.org",
+        "phone": "1-800-684-3322"
+      },
+      {
+        "name": "Sierra Club",
+        "type": "environmental",
+        "contact": "info@sierraclub.org",
+        "phone": "1-415-977-5500"
+      }
+    ],
+    "uiLabels": {
+      "temperature": "°F",
+      "distance": "miles",
+      "speed": "mph",
+      "pressure": "inHg",
+      "humidity": "%",
+      "wind": "Wind Speed",
+      "visibility": "Visibility",
+      "airQuality": "Air Quality Index"
+    },
+    "emergencyNumbers": ["911"],
+    "timezone": "America/New_York",
+    "language": "en"
+  }
+}

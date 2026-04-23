@@ -1,0 +1,14 @@
+# Aider Configuration for EcoNet Backend
+model: groq/llama-3.3-70b-versatile
+edit-format: diff
+
+# Files Aider should always be aware of but never change
+read:
+  - server/services/validationServices.js
+  - .env
+
+# Prevent tampering with sensitive system files
+ignore:
+  - node_modules/
+  - .git/
+  - .aider.tags.cache.v4/

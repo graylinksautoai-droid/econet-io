@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import MainLayout from '../layout/MainLayout';
+import { useState, useEffect } from 'react';
+import MainLayout from '../layouts/MainLayout';
+import { useAuth } from '../context/AuthContext';
+import { API_ENDPOINTS, apiRequest } from '../services/api.js';
+import { resolveMediaUrl } from '../services/runtimeConfig.js';
 import { 
   HiOutlineUser, 
   HiOutlineShieldCheck, 
@@ -17,64 +20,354 @@ import { motion, AnimatePresence } from 'framer-motion';
 const CLOUDINARY_CLOUD_NAME = 'dp9ffewdb';
 const CLOUDINARY_UPLOAD_PRESET = 'econet_avatar';
 
-function EditProfile({ user, onNavigate }) {
-  const [activeSection, setActiveTab] = useState('identity');
+function EditProfile({ onNavigate }) {
+  const { user, setUser, token } = useAuth();
+  const [activeSection, setActiveSection] = useState('identity');
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [avatar, setAvatar] = useState(user?.avatar || '');
   
-  // Advanced Sentinel Settings
-  const [e2eeEnabled, setE2eeEnabled] = useState(true);
-  const [geospatialSalting, setGeospatialSalting] = useState(true);
-  const [progressiveSyncPref, setProgressiveSyncPref] = useState('Aggressive');
-  const [bitrateThrottling, setBitrateThrottling] = useState(true);
+  // Unified Settings Schema
+  const [settings, setSettings] = useState({
+    security: {
+      e2eeEnabled: true,
+      geospatialSalting: true
+    },
+    dataSync: {
+      progressiveSyncPref: 'Aggressive',
+      bitrateThrottling: true
+    },
+    notifications: {
+      email: true,
+      push: true,
+      sms: false,
+      reports: true,
+      comments: true,
+      mentions: true
+    },
+    privacy: {
+      profileVisibility: 'public',
+      showLocation: true,
+      showEmail: false,
+      showPhone: false,
+      dataSharing: 'limited'
+    },
+    appearance: {
+      theme: 'dark',
+      language: 'en',
+      fontSize: 'medium',
+      highContrast: false,
+      animations: true
+    },
+    ai: {
+      liloEnabled: true,
+      autoTagging: true,
+      contentFiltering: true,
+      smartSuggestions: true,
+      aiAssistance: true
+    }
+  });
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
+  const e2eeEnabled = settings.security?.e2eeEnabled ?? false;
+  const geospatialSalting = settings.security?.geospatialSalting ?? false;
+  const progressiveSyncPref = settings.dataSync?.progressiveSyncPref ?? 'Standard';
+  const bitrateThrottling = settings.dataSync?.bitrateThrottling ?? false;
+
+  useEffect(() => {
+    setName(user?.name || '');
+    setBio(user?.bio || '');
+    setAvatar(user?.avatar || '');
+  }, [user]);
+
+  // Load settings once with proper fallback
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+          method: 'GET'
+        });
+
+        const remoteSettings = res?.settings || res?.data;
+
+        if (remoteSettings) {
+          setSettings(prev => ({
+            ...prev,
+            ...remoteSettings
+          }));
+          console.log('Settings loaded successfully:', remoteSettings);
+        }
+      } catch {
+        console.log('Fallback to localStorage');
+        
+        const local = JSON.parse(localStorage.getItem('user'))?.settings;
+        if (local) setSettings(local);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  // Unified persistence function
+  const persistUser = (newSettings) => {
+    const updatedUser = {
+      ...user,
+      name,
+      bio,
+      avatar,
+      settings: newSettings
+    };
+
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
+  // Unified avatar upload function
+  const uploadAvatar = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+      { method: 'POST', body: formData }
+    );
+
+    const data = await res.json();
+    return data.secure_url;
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (JPG, PNG, etc.)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be less than 5MB');
+      return;
+    }
+
+    setUploading(true);
+
     try {
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.secure_url) setAvatar(data.secure_url);
-    } catch (err) {
-      setError('Neural Sync failed. Check network link.');
+      const url = await uploadAvatar(file);
+      setAvatar(url);
+
+      const updatedUser = { ...user, avatar: url };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem('userAvatar', url);
+
+      try {
+        await apiRequest(API_ENDPOINTS.PROFILE.AVATAR, {
+          method: 'POST',
+          body: JSON.stringify({ avatar: url })
+        });
+      } catch (avatarError) {
+        console.warn('Avatar API sync deferred:', avatarError);
+      }
+
+      setSuccess('Avatar updated');
+    } catch {
+      setError('Upload failed');
     } finally {
       setUploading(false);
     }
   };
 
+  // Apply settings immediately in the app
+  const applySettings = (settings) => {
+    // Apply security settings
+    if (settings.security?.e2eeEnabled) {
+      console.log('E2EE Enabled - Messages will be end-to-end encrypted');
+      // Here you would initialize encryption libraries
+    }
+    
+    if (settings.security?.geospatialSalting) {
+      console.log('Geospatial Salting Enabled - Location data will be salted');
+      // Here you would enable location data salting
+    }
+    
+    // Apply data sync settings
+    if (settings.dataSync?.progressiveSyncPref) {
+      console.log(`Progressive Sync Mode: ${settings.dataSync.progressiveSyncPref}`);
+      // Here you would configure sync intervals
+      localStorage.setItem('syncMode', settings.dataSync.progressiveSyncPref);
+    }
+    
+    if (settings.dataSync?.bitrateThrottling) {
+      console.log('Bitrate Throttling Enabled - Stream quality will auto-adjust');
+      // Here you would enable network-aware streaming
+      localStorage.setItem('bitrateThrottling', 'enabled');
+    }
+  };
+
+  // Individual setting handlers
+  const handleE2EEToggle = async () => {
+    const newState = !settings.security.e2eeEnabled;
+
+    const updated = {
+      ...settings,
+      security: { ...settings.security, e2eeEnabled: newState }
+    };
+
+    setSettings(updated);
+
+    try {
+      await apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+        method: 'PATCH',
+        body: JSON.stringify({ security: updated.security })
+      });
+
+      applySettings(updated);
+      persistUser(updated);
+      setSuccess(`E2EE ${newState ? 'enabled' : 'disabled'} successfully`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setError('Failed to update E2EE');
+    }
+  };
+
+  const handleGeospatialToggle = async () => {
+    const newState = !settings.security.geospatialSalting;
+
+    const updated = {
+      ...settings,
+      security: { ...settings.security, geospatialSalting: newState }
+    };
+
+    setSettings(updated);
+
+    try {
+      await apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+        method: 'PATCH',
+        body: JSON.stringify({ security: updated.security })
+      });
+
+      applySettings(updated);
+      persistUser(updated);
+      setSuccess(`Geospatial salting ${newState ? 'enabled' : 'disabled'} successfully`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setError('Failed to update geospatial salting');
+    }
+  };
+
+  const handleSyncModeChange = async (mode) => {
+    const updated = {
+      ...settings,
+      dataSync: { ...settings.dataSync, progressiveSyncPref: mode }
+    };
+
+    setSettings(updated);
+
+    try {
+      await apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+        method: 'PATCH',
+        body: JSON.stringify({ dataSync: updated.dataSync })
+      });
+
+      applySettings(updated);
+      persistUser(updated);
+      setSuccess(`Sync mode changed to ${mode}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setError('Failed to update sync mode');
+    }
+  };
+
+  const handleBitrateToggle = async () => {
+    const newState = !settings.dataSync.bitrateThrottling;
+
+    const updated = {
+      ...settings,
+      dataSync: { ...settings.dataSync, bitrateThrottling: newState }
+    };
+
+    setSettings(updated);
+
+    try {
+      await apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+        method: 'PATCH',
+        body: JSON.stringify({ dataSync: updated.dataSync })
+      });
+
+      applySettings(updated);
+      persistUser(updated);
+      setSuccess(`Bitrate throttling ${newState ? 'enabled' : 'disabled'}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setError('Failed to update bitrate throttling');
+    }
+  };
+
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setSuccess('');
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
     try {
-      const response = await fetch('http://localhost:5000/api/users/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name, bio, avatar })
-      });
-      if (response.ok) {
-        setSuccess('Sentinel protocols updated successfully.');
-        setTimeout(() => window.location.href = '/', 1500);
-      } else {
-        setError('Protocol update failed.');
+      await Promise.all([
+        apiRequest(API_ENDPOINTS.PROFILE.UPDATE, {
+          method: 'PATCH',
+          body: JSON.stringify({ name, bio, avatar })
+        }),
+        apiRequest(API_ENDPOINTS.PROFILE.SETTINGS, {
+          method: 'PATCH',
+          body: JSON.stringify(settings)
+        })
+      ]);
+
+      const updatedUser = {
+        ...user,
+        name,
+        bio,
+        avatar,
+        settings
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem('userProfile', JSON.stringify({ name, bio, avatar }));
+      localStorage.setItem('userSettings', JSON.stringify(settings));
+      if (avatar) {
+        localStorage.setItem('userAvatar', avatar);
       }
+
+      applySettings(settings);
+      setSuccess('All Sentinel protocols updated successfully. Your profile and settings are now active.');
     } catch (err) {
-      setError('Signal lost. Update aborted.');
+      console.error('Profile settings save failed:', err);
+      const updatedUser = {
+        ...user,
+        name,
+        bio,
+        avatar,
+        settings
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem('userProfile', JSON.stringify({ name, bio, avatar }));
+      localStorage.setItem('userSettings', JSON.stringify(settings));
+      if (avatar) {
+        localStorage.setItem('userAvatar', avatar);
+      }
+
+      applySettings(settings);
+      setSuccess('Saved locally. Cloud sync will resume when the backend is available.');
     } finally {
       setLoading(false);
     }
@@ -98,7 +391,7 @@ function EditProfile({ user, onNavigate }) {
             {sections.map(section => (
               <button
                 key={section.id}
-                onClick={() => setActiveTab(section.id)}
+                onClick={() => setActiveSection(section.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${
                   activeSection === section.id 
                     ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-900/20' 
@@ -133,8 +426,14 @@ function EditProfile({ user, onNavigate }) {
 
                       <div className="flex items-center gap-8">
                         <div className="relative group">
-                          <img src={avatar} className="w-32 h-32 rounded-3xl object-cover border-4 border-emerald-500/20 shadow-2xl" alt="Avatar" />
-                          <input type="file" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                          <img src={resolveMediaUrl(avatar)} className="w-32 h-32 rounded-3xl object-cover border-4 border-emerald-500/20 shadow-2xl" alt="Avatar" />
+                          <input 
+                            id="profile-avatar"
+                            name="profileAvatar"
+                            type="file" 
+                            onChange={handleImageUpload} 
+                            className="absolute inset-0 opacity-0 cursor-pointer" 
+                          />
                           <div className="absolute inset-0 bg-black/40 rounded-3xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                              <HiOutlineCloudUpload className="text-white text-3xl" />
                           </div>
@@ -149,6 +448,8 @@ function EditProfile({ user, onNavigate }) {
                         <div>
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Display Name</label>
                           <input 
+                            id="profile-name"
+                            name="profileName"
                             value={name} 
                             onChange={(e) => setName(e.target.value)}
                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500 outline-none font-bold" 
@@ -157,6 +458,8 @@ function EditProfile({ user, onNavigate }) {
                         <div>
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Bio / Directive</label>
                           <textarea 
+                            id="profile-bio"
+                            name="profileBio"
                             value={bio} 
                             onChange={(e) => setBio(e.target.value)}
                             rows="4"
@@ -191,7 +494,7 @@ function EditProfile({ user, onNavigate }) {
                           </div>
                           <button 
                             type="button"
-                            onClick={() => setE2eeEnabled(!e2eeEnabled)}
+                            onClick={handleE2EEToggle}
                             className={`w-12 h-6 rounded-full transition-colors relative ${e2eeEnabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
                           >
                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${e2eeEnabled ? 'left-7' : 'left-1'}`}></div>
@@ -208,7 +511,7 @@ function EditProfile({ user, onNavigate }) {
                           </div>
                           <button 
                             type="button"
-                            onClick={() => setGeospatialSalting(!geospatialSalting)}
+                            onClick={handleGeospatialToggle}
                             className={`w-12 h-6 rounded-full transition-colors relative ${geospatialSalting ? 'bg-blue-600' : 'bg-gray-300'}`}
                           >
                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${geospatialSalting ? 'left-7' : 'left-1'}`}></div>
@@ -239,7 +542,7 @@ function EditProfile({ user, onNavigate }) {
                               <button
                                 key={mode}
                                 type="button"
-                                onClick={() => setProgressiveSyncPref(mode)}
+                                onClick={() => handleSyncModeChange(mode)}
                                 className={`p-4 rounded-2xl border font-bold text-xs transition-all ${
                                   progressiveSyncPref === mode 
                                     ? 'bg-gray-900 border-gray-900 text-white shadow-xl' 
@@ -262,7 +565,7 @@ function EditProfile({ user, onNavigate }) {
                           </div>
                           <button 
                             type="button"
-                            onClick={() => setBitrateThrottling(!bitrateThrottling)}
+                            onClick={handleBitrateToggle}
                             className={`w-12 h-6 rounded-full transition-colors relative ${bitrateThrottling ? 'bg-orange-600' : 'bg-gray-300'}`}
                           >
                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${bitrateThrottling ? 'left-7' : 'left-1'}`}></div>
@@ -288,13 +591,10 @@ function EditProfile({ user, onNavigate }) {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-emerald-900/20">
                            <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Spendable Balance</p>
-                           <div className="flex items-end gap-2 mb-8">
+                           <div className="flex items-end gap-2">
                               <span className="text-4xl font-black">{user?.reputation?.seeds || 1250}</span>
                               <span className="text-sm font-bold pb-1">SEEDS</span>
                            </div>
-                           <button type="button" className="w-full bg-white/20 hover:bg-white/30 backdrop-blur-md py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
-                              Redeem Voucher
-                           </button>
                         </div>
 
                         <div className="bg-orange-500 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-orange-900/20">

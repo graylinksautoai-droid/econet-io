@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoNet Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .pulse-green {
+            animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center text-emerald-400">EcoNet Monitoring Dashboard</h1>
+        
+        <!-- Service Status -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">Backend Service</h2>
+                <div class="flex items-center justify-between">
+                    <span id="backend-status" class="text-yellow-400">Checking...</span>
+                    <div id="backend-indicator" class="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                </div>
+                <div id="backend-uptime" class="text-sm text-gray-400 mt-2">Uptime: --</div>
+            </div>
+            
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">Database</h2>
+                <div class="flex items-center justify-between">
+                    <span id="db-status" class="text-yellow-400">Checking...</span>
+                    <div id="db-indicator" class="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                </div>
+                <div id="db-connections" class="text-sm text-gray-400 mt-2">Connections: --</div>
+            </div>
+            
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">Frontend</h2>
+                <div class="flex items-center justify-between">
+                    <span id="frontend-status" class="text-yellow-400">Checking...</span>
+                    <div id="frontend-indicator" class="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                </div>
+                <div id="frontend-uptime" class="text-sm text-gray-400 mt-2">Status: --</div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">Response Time</h2>
+                <canvas id="responseChart"></canvas>
+            </div>
+            
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4">API Requests</h2>
+                <canvas id="requestsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- System Resources -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+            <h2 class="text-xl font-semibold mb-4">System Resources</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <span>CPU Usage</span>
+                        <span id="cpu-usage">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2">
+                        <div id="cpu-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <span>Memory Usage</span>
+                        <span id="memory-usage">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2">
+                        <div id="memory-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <span>Disk Usage</span>
+                        <span id="disk-usage">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2">
+                        <div id="disk-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h2 class="text-xl font-semibold mb-4">Recent Activity</h2>
+            <div id="logs" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="text-gray-400 text-sm">Waiting for logs...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize charts
+        const responseCtx = document.getElementById('responseChart').getContext('2d');
+        const requestsCtx = document.getElementById('requestsChart').getContext('2d');
+
+        const responseChart = new Chart(responseCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: [],
+                    borderColor: 'rgb(52, 211, 153)',
+                    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: 'rgba(255, 255, 255, 0.7)' }
+                    }
+                }
+            }
+        });
+
+        const requestsChart = new Chart(requestsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['GET', 'POST', 'PUT', 'DELETE'],
+                datasets: [{
+                    label: 'Requests per minute',
+                    data: [0, 0, 0, 0],
+                    backgroundColor: [
+                        'rgba(52, 211, 153, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(251, 146, 60, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: 'rgba(255, 255, 255, 0.7)' }
+                    }
+                }
+            }
+        });
+
+        // Monitoring functions
+        async function checkServiceStatus() {
+            try {
+                // Check backend
+                const backendResponse = await fetch('http://localhost:5000/health/health');
+                if (backendResponse.ok) {
+                    const health = await backendResponse.json();
+                    updateStatus('backend', 'healthy', health.uptime);
+                } else {
+                    updateStatus('backend', 'unhealthy', 0);
+                }
+            } catch (error) {
+                updateStatus('backend', 'offline', 0);
+            }
+
+            try {
+                // Check frontend
+                const frontendResponse = await fetch('http://localhost:80');
+                if (frontendResponse.ok) {
+                    updateStatus('frontend', 'healthy', 0);
+                } else {
+                    updateStatus('frontend', 'unhealthy', 0);
+                }
+            } catch (error) {
+                updateStatus('frontend', 'offline', 0);
+            }
+        }
+
+        function updateStatus(service, status, uptime) {
+            const statusEl = document.getElementById(`${service}-status`);
+            const indicatorEl = document.getElementById(`${service}-indicator`);
+            const uptimeEl = document.getElementById(`${service}-uptime`);
+
+            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            
+            if (status === 'healthy') {
+                statusEl.className = 'text-green-400';
+                indicatorEl.className = 'w-3 h-3 bg-green-400 rounded-full pulse-green';
+            } else if (status === 'unhealthy') {
+                statusEl.className = 'text-yellow-400';
+                indicatorEl.className = 'w-3 h-3 bg-yellow-400 rounded-full';
+            } else {
+                statusEl.className = 'text-red-400';
+                indicatorEl.className = 'w-3 h-3 bg-red-400 rounded-full';
+            }
+
+            if (uptime && uptime > 0) {
+                uptimeEl.textContent = `Uptime: ${Math.floor(uptime)}s`;
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const logsEl = document.getElementById('logs');
+            const logEl = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let colorClass = 'text-gray-400';
+            if (type === 'success') colorClass = 'text-green-400';
+            if (type === 'warning') colorClass = 'text-yellow-400';
+            if (type === 'error') colorClass = 'text-red-400';
+            
+            logEl.className = `${colorClass} text-sm`;
+            logEl.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${message}`;
+            
+            logsEl.insertBefore(logEl, logsEl.firstChild);
+            
+            // Keep only last 10 logs
+            while (logsEl.children.length > 10) {
+                logsEl.removeChild(logsEl.lastChild);
+            }
+        }
+
+        function updateMetrics() {
+            // Simulate metrics (in real app, this would come from backend)
+            const cpu = Math.random() * 30 + 10;
+            const memory = Math.random() * 40 + 20;
+            const disk = Math.random() * 20 + 10;
+
+            document.getElementById('cpu-usage').textContent = `${cpu.toFixed(1)}%`;
+            document.getElementById('cpu-bar').style.width = `${cpu}%`;
+
+            document.getElementById('memory-usage').textContent = `${memory.toFixed(1)}%`;
+            document.getElementById('memory-bar').style.width = `${memory}%`;
+
+            document.getElementById('disk-usage').textContent = `${disk.toFixed(1)}%`;
+            document.getElementById('disk-bar').style.width = `${disk}%`;
+
+            // Update charts
+            const now = new Date().toLocaleTimeString();
+            responseChart.data.labels.push(now);
+            responseChart.data.datasets[0].data.push(Math.random() * 100 + 50);
+            
+            if (responseChart.data.labels.length > 10) {
+                responseChart.data.labels.shift();
+                responseChart.data.datasets[0].data.shift();
+            }
+            
+            responseChart.update();
+
+            // Update requests chart
+            requestsChart.data.datasets[0].data = [
+                Math.floor(Math.random() * 50),
+                Math.floor(Math.random() * 30),
+                Math.floor(Math.random() * 20),
+                Math.floor(Math.random() * 10)
+            ];
+            requestsChart.update();
+        }
+
+        // Start monitoring
+        setInterval(checkServiceStatus, 5000);
+        setInterval(updateMetrics, 3000);
+        setInterval(() => addLog('System check completed', 'success'), 10000);
+
+        // Initial checks
+        checkServiceStatus();
+        updateMetrics();
+        addLog('Monitoring dashboard initialized', 'success');
+    </script>
+</body>
+</html>

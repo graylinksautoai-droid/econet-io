@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/* 1. THEME SYSTEM */
+/* Light theme (default) */
+html.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --bg-tertiary: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-color: #d1d5db;
+  --accent-color: #10b981;
+}
+
+/* Dark theme */
+html.dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --border-color: #475569;
+  --accent-color: #10b981;
+}
+
+/* Green theme */
+html.green {
+  --bg-primary: #064e3b;
+  --bg-secondary: #047857;
+  --bg-tertiary: #059669;
+  --text-primary: #ecfdf5;
+  --text-secondary: #d1fae5;
+  --text-tertiary: #a7f3d0;
+  --border-color: #34d399;
+  --accent-color: #fbbf24;
+}
+
+/* Apply theme variables */
+body {
+  margin: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden; /* Prevents double scrollbars on the dashboard */
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 2. RESET ROOT FOR DASHBOARDS */
+#root {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  text-align: left; /* Restores normal layout */
+}
+
+/* 2. ECONET BRAND COLORS & GLASS UI */
+:root {
+  --brand-green: #10b981; /* Emerald 500 */
+  --brand-dark: #064e3b;  /* Emerald 900 */
+}
+
+/* Theme-aware glass UI */
+.glass-ui {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+html.dark .glass-ui {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+html.green .glass-ui {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Theme-aware utility classes */
+.bg-primary { background-color: var(--bg-primary); }
+.bg-secondary { background-color: var(--bg-secondary); }
+.bg-tertiary { background-color: var(--bg-tertiary); }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+
+.border-theme { border-color: var(--border-color); }
+
+/* Slim LED light indicator */
+.led-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.led-indicator.active {
+  background-color: var(--accent-color);
+  box-shadow: 0 0 8px var(--accent-color);
+}
+
+.led-indicator.pulse {
+  animation: led-pulse 2s infinite;
+}
+
+@keyframes led-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+/* 3. ANIMATIONS */
+@keyframes ping-slow {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* 4. VIDEO FIX */
+/* Ensures video fills its container without being squeezed */
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 5. SIDEBAR SCROLLING */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.5);
+  border-radius: 10px;
+}

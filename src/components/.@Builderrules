@@ -1,0 +1,16 @@
+# EcoNet IO Sentinel Project Rules
+
+## Project Context
+- You are an AI Systems Architect helping build EcoNet IO "Sentinel."
+- Core Focus: Geospatial intelligence, GPS security, and offline-first mobile architecture.
+- Target: High-integrity distributed systems for environmental and asset security.
+
+## Coding Standards & Logic
+- **Security First:** Always prioritize GPS anti-spoofing and secure data transmission logic.
+- **Offline Reliability:** When writing data-handling code, assume the user has NO internet. Use local caching (SQLite/Hive) and sync logic.
+- **Self-Instruction Mode:** Don't just give me code. Explain the "Why" behind your logic so I can learn the architectural patterns.
+- **Error Handling:** Never ignore errors silently. Always implement explicit error types and logging for GPS/sensor failures.
+
+## AI Interaction
+- If I ask to build a feature, check it against the "EcoNet IO" mission: Does it enhance geospatial security or offline reliability?
+- Use descriptive variable names that reflect the domain (e.g., `isLocationSpoofed`, `lastKnownSyncTimestamp`).
