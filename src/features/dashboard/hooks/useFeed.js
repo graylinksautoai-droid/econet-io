@@ -49,7 +49,7 @@ export function useFeed(initialFilter = 'for-you', token = null) {
 
       console.error('FEED HOOK: Fetch failed:', error);
     }
-  }, []);
+  }, [effectiveToken, state.filter]);
 
   /**
    * Refresh current feed
@@ -94,7 +94,7 @@ export function useFeed(initialFilter = 'for-you', token = null) {
       console.error('FEED HOOK: Comment submission failed:', error);
       throw error;
     }
-  }, []);
+  }, [effectiveToken]);
 
   /**
    * Toggle like
@@ -137,7 +137,7 @@ export function useFeed(initialFilter = 'for-you', token = null) {
   // Initial fetch
   useEffect(() => {
     fetchFeed(initialFilter);
-  }, []);
+  }, [fetchFeed, initialFilter]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

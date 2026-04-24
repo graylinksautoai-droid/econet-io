@@ -76,8 +76,20 @@ const seededReports = [
 ];
 
 const sessions = new Map();
-const usersStore = getStore('econet-users');
-const reportsStore = getStore('econet-reports');
+let memoryUsers = [...seededUsers];
+let memoryReports = [...seededReports];
+let cachedStores = null;
+
+function getStores() {
+  if (!cachedStores) {
+    cachedStores = {
+      usersStore: getStore('econet-users'),
+      reportsStore: getStore('econet-reports')
+    };
+  }
+
+  return cachedStores;
+}
 
 async function readAllEntries(store) {
   const { blobs } = await store.list();
@@ -92,6 +104,7 @@ async function readAllEntries(store) {
 }
 
 async function ensureSeedData() {
+  const { usersStore, reportsStore } = getStores();
   const userEntries = await usersStore.list();
   if (userEntries.blobs.length === 0) {
     await Promise.all(
@@ -108,26 +121,51 @@ async function ensureSeedData() {
 }
 
 async function loadUsers() {
-  await ensureSeedData();
-  const entries = await readAllEntries(usersStore);
-  return entries.map(({ value }) => value);
+  try {
+    const { usersStore } = getStores();
+    await ensureSeedData();
+    const entries = await readAllEntries(usersStore);
+    memoryUsers = entries.map(({ value }) => value);
+    return memoryUsers;
+  } catch (error) {
+    console.error('Netlify users store unavailable, using memory fallback:', error);
+    return memoryUsers;
+  }
 }
 
 async function loadReports() {
-  await ensureSeedData();
-  const entries = await readAllEntries(reportsStore);
-  return entries
-    .map(({ value }) => value)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  try {
+    const { reportsStore } = getStores();
+    await ensureSeedData();
+    const entries = await readAllEntries(reportsStore);
+    memoryReports = entries.map(({ value }) => value);
+    return memoryReports
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (error) {
+    console.error('Netlify reports store unavailable, using memory fallback:', error);
+    return [...memoryReports].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
 }
 
 async function saveUser(user) {
-  await usersStore.setJSON(user.id, user);
+  memoryUsers = [...memoryUsers.filter((entry) => entry.id !== user.id), user];
+  try {
+    const { usersStore } = getStores();
+    await usersStore.setJSON(user.id, user);
+  } catch (error) {
+    console.error('Failed to persist user to Netlify Blobs, using memory fallback:', error);
+  }
   return user;
 }
 
 async function saveReport(report) {
-  await reportsStore.setJSON(report.id, report);
+  memoryReports = [...memoryReports.filter((entry) => entry.id !== report.id), report];
+  try {
+    const { reportsStore } = getStores();
+    await reportsStore.setJSON(report.id, report);
+  } catch (error) {
+    console.error('Failed to persist report to Netlify Blobs, using memory fallback:', error);
+  }
   return report;
 }
 

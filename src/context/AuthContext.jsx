@@ -9,9 +9,21 @@ const readStoredAuth = () => {
   const localToken = localStorage.getItem('token');
   const sessionToken = sessionStorage.getItem('token');
 
-  const storage = localToken || localUser ? 'local' : 'session';
-  const userRaw = storage === 'local' ? localUser : sessionUser;
-  const token = storage === 'local' ? localToken : sessionToken;
+  const hasLocalAuth = Boolean(localUser && localToken);
+  const hasSessionAuth = Boolean(sessionUser && sessionToken);
+  const storage = hasLocalAuth ? 'local' : 'session';
+  const userRaw = hasLocalAuth ? localUser : hasSessionAuth ? sessionUser : null;
+  const token = hasLocalAuth ? localToken : hasSessionAuth ? sessionToken : null;
+
+  if (!hasLocalAuth) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  }
+
+  if (!hasSessionAuth) {
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+  }
 
   return {
     storage,
