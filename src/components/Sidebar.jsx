@@ -41,12 +41,28 @@ function Sidebar({ user, isAuthenticated, onLogout, onNavigate, onToggleCommandM
               <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
               <button onClick={() => { onNavigate('/marketplace'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
               <button onClick={() => { onNavigate('/amber-alerts'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
-              {isAuthenticated ? (
-                <button onClick={handleLogout} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Logout</button>
-              ) : (
-                <button onClick={() => { onNavigate('/login'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Login</button>
-              )}
             </nav>
+            <div className="space-y-3 border-t border-white/10 pt-6 text-sm">
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-green-100/60">Account</div>
+              <button
+                onClick={() => { onNavigate('/login'); onMobileMenuToggle?.(); }}
+                className={`block w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors ${
+                  isAuthenticated ? 'border-white/10 bg-white/5 text-white/50' : 'border-emerald-300/30 bg-emerald-400/10 text-white hover:bg-emerald-400/20'
+                }`}
+                disabled={isAuthenticated}
+              >
+                Login
+              </button>
+              <button
+                onClick={handleLogout}
+                className={`block w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors ${
+                  isAuthenticated ? 'border-red-300/30 bg-red-400/10 text-white hover:bg-red-400/20' : 'border-white/10 bg-white/5 text-white/50'
+                }`}
+                disabled={!isAuthenticated}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -63,12 +79,28 @@ function Sidebar({ user, isAuthenticated, onLogout, onNavigate, onToggleCommandM
             <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
             <button onClick={() => onNavigate('/marketplace')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
             <button onClick={() => onNavigate('/amber-alerts')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
-            {isAuthenticated ? (
-              <button onClick={handleLogout} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Logout</button>
-            ) : (
-              <button onClick={() => onNavigate('/login')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Login</button>
-            )}
           </nav>
+          <div className="space-y-3 border-t border-white/10 pt-6 text-sm">
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-green-100/60">Account</div>
+            <button
+              onClick={() => onNavigate('/login')}
+              className={`block w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors ${
+                isAuthenticated ? 'border-white/10 bg-white/5 text-white/50' : 'border-emerald-300/30 bg-emerald-400/10 text-white hover:bg-emerald-400/20'
+              }`}
+              disabled={isAuthenticated}
+            >
+              Login
+            </button>
+            <button
+              onClick={handleLogout}
+              className={`block w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors ${
+                isAuthenticated ? 'border-red-300/30 bg-red-400/10 text-white hover:bg-red-400/20' : 'border-white/10 bg-white/5 text-white/50'
+              }`}
+              disabled={!isAuthenticated}
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
     </>

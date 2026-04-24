@@ -270,7 +270,14 @@ const MapView = ({ activeIncident, reports = [] }) => {
     if (!map.current || !isLoaded || !activeIncident) return;
 
     try {
-      const coords = activeIncident.location?.coordinates;
+      const coords =
+        activeIncident.location?.coordinates && activeIncident.location.coordinates.length === 2
+          ? activeIncident.location.coordinates
+          : activeIncident.location?.lon != null && activeIncident.location?.lat != null
+            ? [activeIncident.location.lon, activeIncident.location.lat]
+            : activeIncident.location?.lng != null && activeIncident.location?.lat != null
+              ? [activeIncident.location.lng, activeIncident.location.lat]
+              : null;
       if (coords && coords.length === 2) {
         map.current.flyTo({
           center: coords,
