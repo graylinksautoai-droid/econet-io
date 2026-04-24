@@ -12,7 +12,7 @@ const seededUsers = [
     name: 'Demo User',
     email: 'demo@econet.io',
     password: 'password123',
-    avatar: 'https://via.placeholder.com/150',
+    avatar: '/econet-logo.jpeg',
     bio: '',
     phone: '',
     location: '',
@@ -387,7 +387,7 @@ export async function handler(event) {
         name,
         email,
         password,
-        avatar: 'https://via.placeholder.com/150',
+        avatar: '/econet-logo.jpeg',
         bio: '',
         phone: '',
         location: '',
@@ -502,6 +502,19 @@ export async function handler(event) {
       const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, message: 'Notifications disabled for beta preview' });
+    }
+
+    if (path.endsWith('/region/config') && httpMethod === 'GET') {
+      const country = queryStringParameters?.country || 'Nigeria';
+      return json(200, {
+        success: true,
+        country,
+        commandCenterEnabled: true,
+        preferredMapCenter: [7.4951, 9.0579],
+        alertPriorities: ['Flood', 'Fire', 'Heatwave', 'Pollution'],
+        liveFrontEnabled: true,
+        language: 'en-NG'
+      });
     }
 
     if (path.endsWith('/analyze-report') && httpMethod === 'POST') {

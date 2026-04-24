@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getApiBaseUrl } from '../services/runtimeConfig.js';
 
 /**
  * Hook for autonomous regional configuration detection
@@ -137,7 +138,7 @@ export function useRegionalConfig() {
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const response = await fetch(
-        `/api/region/config?country=${encodeURIComponent(region.country)}`,
+        `${getApiBaseUrl()}/region/config?country=${encodeURIComponent(region.country)}`,
         {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         }
@@ -146,7 +147,11 @@ export function useRegionalConfig() {
       if (response.ok) {
         const config = await response.json();
         // Cache in localStorage
-        localStorage.setItem('regionalConfig', JSON.stringify(config));
+        try {
+          localStorage.setItem('regionalConfig', JSON.stringify(config));
+        } catch (error) {
+          console.warn('Failed to cache regional config:', error);
+        }
         return config;
       }
     } catch (error) {

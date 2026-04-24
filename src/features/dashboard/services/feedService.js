@@ -10,6 +10,15 @@ export class FeedService {
     this.apiBaseUrl = getApiBaseUrl();
   }
 
+  createTimeoutController(timeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return {
+      controller,
+      clear: () => clearTimeout(timeoutId)
+    };
+  }
+
   /**
    * Fetch feed data
    */
@@ -18,15 +27,14 @@ export class FeedService {
       console.log('FEED SERVICE: Fetching feed with filter:', filter);
       
       const url = `${this.apiBaseUrl}/reports/feed?filter=${filter}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeout = this.createTimeoutController(12000);
       
       const response = await fetch(url, {
         method: 'GET',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        signal: controller.signal
+        signal: timeout.controller.signal
       });
-      clearTimeout(timeoutId);
+      timeout.clear();
 
       console.log('FEED SERVICE: Response status:', response.status);
 
@@ -176,8 +184,7 @@ export class FeedService {
   async createPost(postData, token = null) {
     try {
       console.log('FEED SERVICE: Creating post:', postData);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeout = this.createTimeoutController(25000);
       
       const response = await fetch(`${this.apiBaseUrl}/reports`, {
         method: 'POST',
@@ -186,9 +193,9 @@ export class FeedService {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(postData),
-        signal: controller.signal
+        signal: timeout.controller.signal
       });
-      clearTimeout(timeoutId);
+      timeout.clear();
 
       console.log('FEED SERVICE: Create post response status:', response.status);
 
@@ -207,7 +214,7 @@ export class FeedService {
       console.error('FEED SERVICE: Create post failed:', error);
       return {
         success: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Post request timed out before the upload completed.' : error.message
       };
     }
   }

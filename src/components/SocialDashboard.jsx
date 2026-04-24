@@ -76,12 +76,50 @@ function readLocalPosts() {
   try {
     return JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
   } catch {
+    localStorage.removeItem(LOCAL_POSTS_KEY);
     return [];
   }
 }
 
+function compactStoredPost(post) {
+  const compactMedia = (post.media || []).map((media) => {
+    if (typeof media?.url !== 'string') return media;
+    if (media.url.startsWith('data:') && media.url.length > 120000) {
+      return { ...media, url: '', wasTrimmed: true };
+    }
+    return media;
+  });
+
+  const compactImages = (post.images || []).map((image) => (
+    typeof image === 'string' && image.startsWith('data:') && image.length > 120000 ? '' : image
+  ));
+
+  return {
+    ...post,
+    images: compactImages.filter(Boolean),
+    media: compactMedia.filter((media) => media?.url || media?.type === 'audio')
+  };
+}
+
 function writeLocalPosts(posts) {
-  localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(posts));
+  const trimmedPosts = posts.slice(0, 10).map(compactStoredPost);
+
+  try {
+    localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(trimmedPosts));
+  } catch (error) {
+    console.warn('Failed to persist local posts, trimming payload:', error);
+    try {
+      const fallbackPosts = trimmedPosts.map((post) => ({
+        ...post,
+        images: [],
+        media: []
+      }));
+      localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(fallbackPosts));
+    } catch (finalError) {
+      console.warn('Local post storage unavailable, clearing fallback cache:', finalError);
+      localStorage.removeItem(LOCAL_POSTS_KEY);
+    }
+  }
 }
 
 function fileToDataUrl(file) {
@@ -172,8 +210,8 @@ const SocialDashboard = ({ user, reports = [] }) => {
       author: reportUser.name || report.authorName || activeUser?.name || 'Anonymous User',
       avatar: resolveMediaUrl(
         isCurrentUserPost
-          ? activeUser?.avatar || reportUser.avatar || report.avatar || 'https://picsum.photos/seed/avatar40/40/40.jpg'
-          : reportUser.avatar || report.avatar || 'https://picsum.photos/seed/avatar40/40/40.jpg'
+          ? activeUser?.avatar || reportUser.avatar || report.avatar || '/econet-logo.jpeg'
+          : reportUser.avatar || report.avatar || '/econet-logo.jpeg'
       ),
       content: report.content || report.description || 'Community post',
       timestamp: report.timestamp || report.createdAt || new Date().toISOString(),
@@ -771,7 +809,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
             )}
             <div className="flex items-center space-x-2">
               <div className="relative">
-                <img src={resolveMediaUrl(activeUser?.avatar) || 'https://picsum.photos/seed/avatar32/32/32.jpg'} alt={activeUser?.name} className="h-8 w-8 cursor-pointer rounded-full object-cover hover:opacity-80" onClick={() => document.getElementById('avatar-upload').click()} />
+                <img src={resolveMediaUrl(activeUser?.avatar) || '/econet-logo.jpeg'} alt={activeUser?.name} className="h-8 w-8 cursor-pointer rounded-full object-cover hover:opacity-80" onClick={() => document.getElementById('avatar-upload').click()} />
                 <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
               </div>
               <span className="text-sm font-medium text-theme-primary">{activeUser?.name}</span>
@@ -808,7 +846,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
           </motion.div>
         )}
 
-        <div className="flex gap-6">
+        <div className="flex flex-col gap-6 lg:flex-row">
           <main className={`flex-1 ${sidebarOpen ? 'hidden md:block' : ''}`}>
             <div className="mb-6 rounded-2xl border border-theme bg-theme-card p-4 shadow-sm">
               <div className="flex space-x-3">
@@ -1035,7 +1073,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
             </div>
           </main>
 
-          <aside className={`w-80 space-y-6 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
+          <aside className={`w-full space-y-6 md:w-80 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
             <div className="rounded-2xl border border-theme bg-theme-card p-4 shadow-sm">
               <h2 className="mb-3 text-lg font-semibold text-theme-primary">Economy Loop</h2>
               <div className="grid grid-cols-2 gap-3">
@@ -1071,9 +1109,9 @@ const SocialDashboard = ({ user, reports = [] }) => {
               <h2 className="mb-4 flex items-center text-lg font-semibold text-theme-primary"><FaFire className="mr-2 text-orange-500" />Trending Topics</h2>
               <div className="space-y-2">
                 {DEFAULT_TRENDING.map((topic, index) => (
-                  <div key={index} className="flex cursor-pointer items-center justify-between rounded-lg p-2 hover:bg-theme-muted">
-                    <span className="font-medium text-theme-primary">{topic.tag}</span>
-                    <div className="flex items-center space-x-2">
+                  <div key={index} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-2 hover:bg-theme-muted">
+                    <span className="min-w-0 truncate font-medium text-theme-primary">{topic.tag}</span>
+                    <div className="flex shrink-0 items-center space-x-2">
                       <span className="text-sm text-theme-secondary">{topic.count.toLocaleString()}</span>
                       {topic.trend === 'up' && <span className="text-xs text-green-500">+</span>}
                       {topic.trend === 'down' && <span className="text-xs text-red-500">-</span>}
