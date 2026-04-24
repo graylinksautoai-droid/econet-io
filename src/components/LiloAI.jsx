@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import useLilo from "../hooks/useLilo";
 import { useVoiceInterface } from "../hooks/useVoiceInterface";
+import { useLiloContext } from "../hooks/useLiloContext";
 
 const LiloAI = () => {
   const { messages, send, clear, activate, deactivate, isActive, mood } = useLilo();
   const { isListening, isSpeaking } = useVoiceInterface();
+  const context = useLiloContext();
   const [input, setInput] = useState("");
   const [showChat, setShowChat] = useState(false);
 
@@ -53,6 +55,13 @@ const LiloAI = () => {
                 ×
               </button>
             </div>
+          </div>
+
+          <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            <div>Page: <span className="font-semibold capitalize">{context.currentPage}</span></div>
+            {context.regionalAlerts[0] && (
+              <div className="mt-1">Regional alert: <span className="font-semibold">{context.regionalAlerts[0].message}</span></div>
+            )}
           </div>
 
           {/* Messages */}

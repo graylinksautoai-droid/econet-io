@@ -26,6 +26,8 @@ const CommandCenter = ({ reports = [], user }) => {
     region: 'all',
     state: 'all'
   });
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobilePredictions, setShowMobilePredictions] = useState(false);
 
   // Initialize pinned situations with simulated data if no reports
   useEffect(() => {
@@ -317,10 +319,25 @@ const CommandCenter = ({ reports = [], user }) => {
         </div>
       </div>
 
+      <div className="flex gap-2 border-b border-gray-700 bg-gray-900 px-4 py-3 lg:hidden">
+        <button
+          onClick={() => setShowMobileFilters((prev) => !prev)}
+          className="rounded-full bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Filters
+        </button>
+        <button
+          onClick={() => setShowMobilePredictions((prev) => !prev)}
+          className="rounded-full bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Predictions
+        </button>
+      </div>
+
       {/* Main Content Area */}
-      <div className="flex h-screen">
+      <div className="flex h-[calc(100vh-120px)]">
         {/* Left Sidebar - Filters & Tools */}
-        <aside className={`w-80 ${isDark ? 'bg-gray-800 border-gray-700' : isLight ? 'bg-white border-gray-200' : 'bg-green-800 border-green-700'} border-r p-4 overflow-y-auto`}>
+        <aside className={`${showMobileFilters ? 'block' : 'hidden'} lg:block w-full lg:w-80 ${isDark ? 'bg-gray-800 border-gray-700' : isLight ? 'bg-white border-gray-200' : 'bg-green-800 border-green-700'} border-r p-4 overflow-y-auto`}>
           {/* Filters */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -448,9 +465,9 @@ const CommandCenter = ({ reports = [], user }) => {
         </aside>
 
         {/* Main Content */}
-        <main className={`flex-1 ${isDark ? 'bg-gray-900' : isLight ? 'bg-gray-50' : 'bg-green-900'}`}>
+        <main className={`flex-1 min-w-0 ${isDark ? 'bg-gray-900' : isLight ? 'bg-gray-50' : 'bg-green-900'} ${showMobileFilters || showMobilePredictions ? 'hidden lg:block' : 'block'}`}>
           {viewMode === 'map' && (
-            <div className="h-full relative" style={{ height: 'calc(100vh - 120px)', minHeight: '600px' }}>
+            <div className="h-full min-h-0 relative">
               <MapView 
                 activeIncident={selectedIncident} 
                 reports={reports.length > 0 ? reports : [
@@ -611,7 +628,7 @@ const CommandCenter = ({ reports = [], user }) => {
         </main>
 
         {/* Right Sidebar - Predictions */}
-        <aside className={`w-80 ${isDark ? 'bg-gray-800 border-gray-700' : isLight ? 'bg-white border-gray-200' : 'bg-green-800 border-green-700'} border-l p-4 overflow-y-auto`}>
+        <aside className={`${showMobilePredictions ? 'block' : 'hidden'} lg:block w-full lg:w-80 ${isDark ? 'bg-gray-800 border-gray-700' : isLight ? 'bg-white border-gray-200' : 'bg-green-800 border-green-700'} border-l p-4 overflow-y-auto`}>
           <h3 className={`text-lg font-semibold mb-4 flex items-center ${isDark ? 'text-gray-100' : isLight ? 'text-gray-800' : 'text-gray-100'}`}>
             <FaGlobe className="inline mr-2" />
             Predictions

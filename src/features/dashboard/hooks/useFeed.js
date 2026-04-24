@@ -139,6 +139,16 @@ export function useFeed(initialFilter = 'for-you', token = null) {
     fetchFeed(initialFilter);
   }, []);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!document.hidden) {
+        fetchFeed(state.filter);
+      }
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [fetchFeed, state.filter]);
+
   return {
     // State
     ...state,

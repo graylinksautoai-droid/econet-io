@@ -139,6 +139,13 @@ const Navbar = ({ onNavigate, onToggleCommandMode, isCommandMode }) => {
               <span className="font-medium">Reports</span>
             </button>
             <button 
+              onClick={() => { onToggleCommandMode?.(); setIsMobileMenuOpen(false); }}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 group"
+            >
+              <FaMap className="text-gray-500 group-hover:text-emerald-600" />
+              <span className="font-medium">{isCommandMode ? 'Exit Command Mode' : 'Open Command Mode'}</span>
+            </button>
+            <button 
               onClick={() => { onNavigate('/profile'); setIsMobileMenuOpen(false); }}
               className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 group"
             >

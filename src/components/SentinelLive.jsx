@@ -188,12 +188,12 @@ const SentinelLive = ({ user, onStop, onStarted }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black p-0 md:bg-black/80 md:p-4 backdrop-blur-xl"
     >
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-gray-900 shadow-2xl">
+      <div className="relative h-full w-full overflow-hidden bg-black md:h-auto md:max-w-4xl md:rounded-3xl md:border md:border-white/10 md:bg-gray-900 md:shadow-2xl">
         <div className="absolute left-4 top-4 z-10 flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white animate-pulse">
             <HiOutlineStatusOnline /> LIVE
@@ -210,9 +210,22 @@ const SentinelLive = ({ user, onStop, onStarted }) => {
           <HiOutlineX className="text-xl" />
         </button>
 
-        <div className="aspect-video bg-gray-800">
+        <div className="h-full min-h-screen bg-black md:aspect-video md:min-h-0">
           {isStreaming ? (
-            <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+            <>
+              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black via-black/60 to-transparent" />
+              <div className="absolute bottom-24 left-4 right-4 z-10 flex items-end justify-between">
+                <div>
+                  <div className="text-xl font-black text-white">@{(user?.name || 'sentinel').replace(/\s+/g, '').toLowerCase()}</div>
+                  <div className="mt-2 max-w-md text-sm text-white/80">Proof-of-presence live front. Capture the signal, then post directly into command processing.</div>
+                </div>
+                <div className="hidden rounded-2xl bg-black/35 px-4 py-3 text-right backdrop-blur md:block">
+                  <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">Signal Quality</div>
+                  <div className="text-lg font-bold text-white">{bitrate}</div>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
@@ -230,7 +243,7 @@ const SentinelLive = ({ user, onStop, onStarted }) => {
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-white/10 bg-gray-900/50 p-6">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between border-t border-white/10 bg-black/50 p-4 backdrop-blur-md md:relative md:bg-gray-900/50 md:p-6">
           <div className="flex items-center gap-4">
             <img src={resolveMediaUrl(user?.avatar)} className="h-12 w-12 rounded-full border-2 border-emerald-500 object-cover" alt="" />
             <div>

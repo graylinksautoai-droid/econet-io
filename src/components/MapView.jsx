@@ -287,12 +287,12 @@ const MapView = ({ activeIncident, reports = [] }) => {
 
   // 4. REACTIVE DATA SYNC (Updates when the 'reports' prop changes)
   useEffect(() => {
-    if (map.current && isLoaded && reports.length > 0) {
+    if (map.current && isLoaded) {
       try {
         const source = map.current.getSource('reports');
         if (source) {
           const features = reports.map(r => {
-            let coordinates = [7.4951, 9.0579]; // Default to Abuja
+            let coordinates = null;
             
             // Handle different location data structures
             if (r.location?.coordinates && Array.isArray(r.location.coordinates)) {
@@ -305,6 +305,10 @@ const MapView = ({ activeIncident, reports = [] }) => {
               coordinates = [r.location.lng, r.location.lat];
             } else if (r.location?.type === 'Point' && r.location?.coordinates) {
               coordinates = r.location.coordinates;
+            }
+
+            if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
+              return null;
             }
             
             return {
@@ -322,7 +326,7 @@ const MapView = ({ activeIncident, reports = [] }) => {
                 content: r.description || r.content || 'Environmental report'
               }
             };
-          });
+          }).filter(Boolean);
           
           console.log('MapView: Updating with', features.length, 'features:', features);
           
@@ -450,7 +454,7 @@ const MapView = ({ activeIncident, reports = [] }) => {
   }, []);
 
   return (
-    <div className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden" style={{ height: '600px' }}>
+    <div className="relative w-full h-full min-h-[420px] bg-slate-900 rounded-lg overflow-hidden" style={{ height: '100%' }}>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20 backdrop-blur-sm">
           <div className="flex flex-col items-center">
@@ -461,7 +465,7 @@ const MapView = ({ activeIncident, reports = [] }) => {
         </div>
       )}
       
-      <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden" style={{ height: '600px' }} />
+      <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden" style={{ height: '100%' }} />
     </div>
   );
 };

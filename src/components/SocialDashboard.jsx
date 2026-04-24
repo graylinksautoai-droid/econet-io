@@ -692,6 +692,23 @@ const SocialDashboard = ({ user, reports = [] }) => {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-theme bg-theme-card p-2 shadow-sm md:hidden">
+          <button onClick={() => setMode('social')} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${mode === 'social' ? 'bg-theme-muted text-theme-primary' : 'text-theme-secondary'}`}>
+            <FaUserFriends className="mr-2 inline" />
+            Social
+          </button>
+          <button onClick={() => setMode('command')} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${mode === 'command' ? 'bg-theme-muted text-theme-primary' : 'text-theme-secondary'}`}>
+            <FaTerminal className="mr-2 inline" />
+            Command
+          </button>
+        </div>
+
+        {composerError && composerError.includes('locally') && (
+          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            This post is only on this device right now. Cross-device visibility on the deployed beta still needs persistent server storage behind the Netlify function.
+          </div>
+        )}
+
         {doubleRewardsUntil && Date.now() < doubleRewardsUntil && (
           <motion.div
             initial={{ opacity: 0, y: -12 }}
