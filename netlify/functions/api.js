@@ -1,10 +1,12 @@
+import { getStore } from '@netlify/blobs';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 };
 
-const users = [
+const seededUsers = [
   {
     id: 'demo-user',
     name: 'Demo User',
@@ -40,7 +42,7 @@ const users = [
   }
 ];
 
-const reports = [
+const seededReports = [
   {
     id: 'netlify-demo-1',
     description: 'River overflow observed near Lokoja after prolonged rainfall.',
@@ -74,6 +76,60 @@ const reports = [
 ];
 
 const sessions = new Map();
+const usersStore = getStore('econet-users');
+const reportsStore = getStore('econet-reports');
+
+async function readAllEntries(store) {
+  const { blobs } = await store.list();
+  const entries = await Promise.all(
+    blobs.map(async ({ key }) => {
+      const value = await store.get(key, { type: 'json' });
+      return value ? { key, value } : null;
+    })
+  );
+
+  return entries.filter(Boolean);
+}
+
+async function ensureSeedData() {
+  const userEntries = await usersStore.list();
+  if (userEntries.blobs.length === 0) {
+    await Promise.all(
+      seededUsers.map((user) => usersStore.setJSON(user.id, user, { onlyIfNew: true }))
+    );
+  }
+
+  const reportEntries = await reportsStore.list();
+  if (reportEntries.blobs.length === 0) {
+    await Promise.all(
+      seededReports.map((report) => reportsStore.setJSON(report.id, report, { onlyIfNew: true }))
+    );
+  }
+}
+
+async function loadUsers() {
+  await ensureSeedData();
+  const entries = await readAllEntries(usersStore);
+  return entries.map(({ value }) => value);
+}
+
+async function loadReports() {
+  await ensureSeedData();
+  const entries = await readAllEntries(reportsStore);
+  return entries
+    .map(({ value }) => value)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+async function saveUser(user) {
+  await usersStore.setJSON(user.id, user);
+  return user;
+}
+
+async function saveReport(report) {
+  await reportsStore.setJSON(report.id, report);
+  return report;
+}
 
 function json(statusCode, body) {
   return {
@@ -98,19 +154,21 @@ function createToken(user) {
   return token;
 }
 
-function getUserFromToken(headers = {}) {
+async function getUserFromToken(headers = {}) {
   const authHeader = headers.authorization || headers.Authorization;
   if (!authHeader?.startsWith('Bearer ')) return null;
 
   const token = authHeader.slice(7);
   const sessionUserId = sessions.get(token);
   if (sessionUserId) {
+    const users = await loadUsers();
     return users.find((user) => user.id === sessionUserId) || null;
   }
 
   try {
     const [, payload] = token.split('.');
     const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const users = await loadUsers();
     return users.find((user) => user.id === decoded.id || user.email === decoded.email) || null;
   } catch {
     return null;
@@ -163,7 +221,9 @@ function calculateStanding(userReports = [], verifiedReports = 0) {
   };
 }
 
-function refreshUserStanding(userId) {
+async function refreshUserStanding(userId) {
+  const users = await loadUsers();
+  const reports = await loadReports();
   const user = users.find((entry) => entry.id === userId);
   if (!user) return null;
 
@@ -177,10 +237,12 @@ function refreshUserStanding(userId) {
     seeds: standing.ecoCoins
   };
   user.verifiedReporter = standing.verifiedReporter;
+  await saveUser(user);
   return user;
 }
 
-function serializeReport(report) {
+async function serializeReport(report) {
+  const users = await loadUsers();
   const author = users.find((user) => user.id === report.userId);
 
   return {
@@ -258,6 +320,7 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/auth/login') && httpMethod === 'POST') {
+      const users = await loadUsers();
       const { email, password } = JSON.parse(body || '{}');
       const user = users.find((entry) => entry.email === email);
 
@@ -274,6 +337,7 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/auth/register') && httpMethod === 'POST') {
+      const users = await loadUsers();
       const { name, email, password } = JSON.parse(body || '{}');
 
       if (users.some((entry) => entry.email === email)) {
@@ -306,7 +370,7 @@ export async function handler(event) {
         }
       };
 
-      users.push(user);
+      await saveUser(user);
       const token = createToken(user);
       return json(201, {
         message: 'User created successfully',
@@ -316,19 +380,19 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/auth/profile') && httpMethod === 'GET') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, user: serializeUser(user) });
     }
 
     if (path.endsWith('/profile') && httpMethod === 'GET') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, data: serializeUser(user) });
     }
 
     if (path.endsWith('/profile') && (httpMethod === 'PUT' || httpMethod === 'PATCH')) {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       const payload = JSON.parse(body || '{}');
       Object.assign(user, {
@@ -340,17 +404,18 @@ export async function handler(event) {
         phone: payload.phone ?? user.phone,
         avatar: payload.avatar ?? user.avatar
       });
+      await saveUser(user);
       return json(200, { success: true, message: 'Profile updated successfully', data: serializeUser(user) });
     }
 
     if (path.endsWith('/profile/settings') && httpMethod === 'GET') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, settings: user.settings || {}, data: user.settings || {} });
     }
 
     if (path.endsWith('/profile/settings') && (httpMethod === 'PUT' || httpMethod === 'PATCH')) {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       const payload = JSON.parse(body || '{}');
       const category = payload.category;
@@ -361,20 +426,22 @@ export async function handler(event) {
       } else {
         user.settings = { ...user.settings, ...nextSettings };
       }
+      await saveUser(user);
 
       return json(200, { success: true, message: 'Settings updated successfully', settings: user.settings, data: user.settings });
     }
 
     if (path.endsWith('/profile/avatar') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       const payload = JSON.parse(body || '{}');
       user.avatar = payload.avatar || user.avatar;
+      await saveUser(user);
       return json(200, { success: true, message: 'Avatar updated successfully', data: { avatar: user.avatar } });
     }
 
     if (path.endsWith('/upload/image') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       const payload = JSON.parse(body || '{}');
       return json(200, {
@@ -388,13 +455,13 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/notifications/subscribe') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, message: 'Notifications enabled for beta preview' });
     }
 
     if (path.endsWith('/notifications/unsubscribe') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
       return json(200, { success: true, message: 'Notifications disabled for beta preview' });
     }
@@ -413,13 +480,14 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/reports/feed') && httpMethod === 'GET') {
+      const reports = await loadReports();
       const filter = queryStringParameters?.filter || 'for-you';
       const filteredReports = filter === 'for-you' ? reports : reports;
-      return json(200, filteredReports.map(serializeReport));
+      return json(200, await Promise.all(filteredReports.map(serializeReport)));
     }
 
     if (path.endsWith('/reports') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
 
       const payload = JSON.parse(body || '{}');
@@ -447,52 +515,58 @@ export async function handler(event) {
         aiScore: classification.liloClassification.confidence
       };
 
-      reports.unshift(report);
       user.reputation.totalReports += 1;
-      refreshUserStanding(user.id);
+      await saveUser(user);
+      await saveReport(report);
+      await refreshUserStanding(user.id);
 
       return json(201, {
         message: 'Report saved successfully',
-        report: serializeReport(report)
+        report: await serializeReport(report)
       });
     }
 
     if (path.includes('/reports/') && path.endsWith('/like') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
+      const reports = await loadReports();
       const reportId = path.split('/reports/')[1].split('/')[0];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
 
       const liked = report.likes.includes(user.id);
       report.likes = liked ? report.likes.filter((entry) => entry !== user.id) : [...report.likes, user.id];
-      refreshUserStanding(report.userId);
+      await saveReport(report);
+      await refreshUserStanding(report.userId);
 
       return json(200, {
         liked: !liked,
         likes: report.likes.length,
-        report: serializeReport(report)
+        report: await serializeReport(report)
       });
     }
 
     if (path.includes('/reports/') && path.endsWith('/share') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
+      const reports = await loadReports();
       const reportId = path.split('/reports/')[1].split('/')[0];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
       report.sharesCount = (report.sharesCount || 0) + 1;
-      refreshUserStanding(report.userId);
+      await saveReport(report);
+      await refreshUserStanding(report.userId);
 
       return json(200, {
         shares: report.sharesCount,
-        report: serializeReport(report)
+        report: await serializeReport(report)
       });
     }
 
     if (path.includes('/votes/') && path.endsWith('/upvote') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
+      const reports = await loadReports();
       const reportId = path.split('/votes/')[1].split('/')[0];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
@@ -502,7 +576,8 @@ export async function handler(event) {
         ? report.upvotes.filter((entry) => entry !== user.id)
         : [...report.upvotes, user.id];
 
-      refreshUserStanding(report.userId);
+      await saveReport(report);
+      await refreshUserStanding(report.userId);
       return json(200, {
         upvotes: report.upvotes.length,
         downvotes: report.downvotes.length,
@@ -512,8 +587,9 @@ export async function handler(event) {
     }
 
     if (path.includes('/votes/') && path.endsWith('/downvote') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
+      const reports = await loadReports();
       const reportId = path.split('/votes/')[1].split('/')[0];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
@@ -523,7 +599,8 @@ export async function handler(event) {
         ? report.downvotes.filter((entry) => entry !== user.id)
         : [...report.downvotes, user.id];
 
-      refreshUserStanding(report.userId);
+      await saveReport(report);
+      await refreshUserStanding(report.userId);
       return json(200, {
         upvotes: report.upvotes.length,
         downvotes: report.downvotes.length,
@@ -533,9 +610,11 @@ export async function handler(event) {
     }
 
     if (path.includes('/votes/') && path.endsWith('/verify') && httpMethod === 'POST') {
-      const verifier = getUserFromToken(headers);
+      const verifier = await getUserFromToken(headers);
       if (!verifier) return json(401, { error: 'Unauthorized' });
       if ((verifier.reputation?.trustScore || 0) < 70) return json(403, { error: 'Insufficient reputation to verify' });
+      const reports = await loadReports();
+      const users = await loadUsers();
       const reportId = path.split('/votes/')[1].split('/')[0];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
@@ -544,18 +623,21 @@ export async function handler(event) {
       report.verifiedBy = verifier.id;
       report.verifiedAt = new Date().toISOString();
 
+      await saveReport(report);
       const reporter = users.find((entry) => entry.id === report.userId);
       if (reporter) {
         reporter.reputation.verifiedReports = (reporter.reputation.verifiedReports || 0) + 1;
-        refreshUserStanding(reporter.id);
+        await saveUser(reporter);
+        await refreshUserStanding(reporter.id);
       }
 
-      return json(200, { message: 'Report verified', report: serializeReport(report) });
+      return json(200, { message: 'Report verified', report: await serializeReport(report) });
     }
 
     if (path.includes('/comments/') && httpMethod === 'POST') {
-      const user = getUserFromToken(headers);
+      const user = await getUserFromToken(headers);
       if (!user) return json(401, { error: 'Unauthorized' });
+      const reports = await loadReports();
       const reportId = path.split('/comments/')[1];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
@@ -573,11 +655,13 @@ export async function handler(event) {
         }
       };
       report.comments = [...(report.comments || []), comment];
-      refreshUserStanding(report.userId);
+      await saveReport(report);
+      await refreshUserStanding(report.userId);
       return json(201, comment);
     }
 
     if (path.includes('/comments/') && httpMethod === 'GET') {
+      const reports = await loadReports();
       const reportId = path.split('/comments/')[1];
       const report = reports.find((entry) => entry.id === reportId);
       if (!report) return json(404, { error: 'Report not found' });
@@ -585,6 +669,8 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/map/reports') && httpMethod === 'GET') {
+      const reports = await loadReports();
+      const users = await loadUsers();
       const features = reports
         .filter((report) => report.liloClassification?.isClimateRelated && report.postStatus !== 'regular' && report.location?.lat != null && report.location?.lon != null)
         .map((report) => {
@@ -619,6 +705,7 @@ export async function handler(event) {
     }
 
     if (path.endsWith('/users/leaderboard') && httpMethod === 'GET') {
+      const users = await loadUsers();
       return json(200, users.map((user) => serializeUser(user)).sort((a, b) => (b.reputation?.trustScore || 0) - (a.reputation?.trustScore || 0)));
     }
 

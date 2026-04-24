@@ -93,6 +93,25 @@ function fileToDataUrl(file) {
   });
 }
 
+function getCurrentPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position),
+      () => resolve(null),
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 60000
+      }
+    );
+  });
+}
+
 function getMediaType(file) {
   if (file.type.startsWith('video/')) return 'video';
   if (file.type.startsWith('audio/')) return 'audio';
@@ -394,6 +413,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
     const postText = newPost;
     const mediaToClear = attachedMedia;
     const liveContext = liveSession;
+    const geolocation = await getCurrentPosition();
     setNewPost('');
     setAttachedMedia([]);
     triggerBurst(optimisticPost.id);
@@ -418,7 +438,13 @@ const SocialDashboard = ({ user, reports = [] }) => {
               lat: liveContext.location.lat,
               lon: liveContext.location.lon
             }
-          : undefined
+          : geolocation
+            ? {
+                text: 'Device location',
+                lat: geolocation.coords.latitude,
+                lon: geolocation.coords.longitude
+              }
+            : undefined
       };
 
       const result = await feedService.createPost(payload, token);
