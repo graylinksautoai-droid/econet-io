@@ -6,14 +6,17 @@ import SplashScreen from '../components/SplashScreen';
 import MapView from '../components/MapView';
 import { useFeed } from '../features/dashboard/hooks/useFeed';
 import { useAuth } from '../context/AuthContext';
+import { isCommandEligible } from '../services/postSignal';
 
 const MainLayout = ({ user, onLogout, onNavigate, children }) => {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, token } = useAuth();
   const activeUser = currentUser || user;
+  const isAuthenticated = Boolean(token && currentUser);
   const [showSplash, setShowSplash] = useState(true);
   const [isCommandMode, setIsCommandMode] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const feed = useFeed('for-you', activeUser?.token);
+  const commandReports = feed.reports.filter((report) => isCommandEligible(report));
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2000);
@@ -38,8 +41,10 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
       <div className="hidden lg:block">
         <Sidebar 
           user={activeUser} 
+          isAuthenticated={isAuthenticated}
           onLogout={onLogout} 
           onNavigate={onNavigate}
+          onToggleCommandMode={handleToggleCommandMode}
           isMobileMenuOpen={isMobileMenuOpen}
           onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
@@ -49,8 +54,10 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
       <div className="lg:hidden">
         <Sidebar 
           user={activeUser} 
+          isAuthenticated={isAuthenticated}
           onLogout={onLogout} 
           onNavigate={onNavigate}
+          onToggleCommandMode={handleToggleCommandMode}
           isMobileMenuOpen={isMobileMenuOpen}
           onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
@@ -81,7 +88,7 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
           {isCommandMode && (
             <div className="w-full lg:w-[70%] h-full min-h-0 flex flex-col bg-gray-900 absolute lg:relative inset-0 z-0 lg:z-10">
               {activeUser ? (
-                <MapView reports={feed.reports} />
+                <MapView reports={commandReports} />
               ) : (
                 <div className="p-4 text-center opacity-80">
                   Geospatial command view is locked.

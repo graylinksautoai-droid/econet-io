@@ -156,6 +156,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
   const [harvestState, setHarvestState] = useState(() => readHarvestState());
   const [bloomMeter, setBloomMeter] = useState(0);
   const [doubleRewardsUntil, setDoubleRewardsUntil] = useState(null);
+  const [announcementIndex, setAnnouncementIndex] = useState(0);
 
   const normalizePost = (report) => {
     const reportUser = report.user || {};
@@ -257,6 +258,46 @@ const SocialDashboard = ({ user, reports = [] }) => {
 
     return () => window.clearInterval(timer);
   }, [doubleRewardsUntil]);
+
+  const liveAnnouncements = useMemo(() => {
+    const liveCards = posts
+      .filter((post) => post.isLive || post.proofOfPresence || isCommandEligible(post))
+      .slice(0, 4)
+      .map((post) => ({
+        id: `live-${post.id}`,
+        tone: post.isLive ? 'live' : 'signal',
+        text: post.isLive
+          ? `${post.author} is live now. Join the field front and follow updates.`
+          : `${post.author} pushed a ${getPostStatus(post)} signal into command watch.`
+      }));
+
+    const engagementCards = posts
+      .filter((post) => (post.likes || 0) > 0 || (post.comments || 0) > 0)
+      .slice(0, 4)
+      .map((post) => ({
+        id: `engage-${post.id}`,
+        tone: 'engagement',
+        text: `${post.author}'s post is gaining traction: ${post.likes || 0} likes and ${post.comments || 0} comments.`
+      }));
+
+    return [...liveCards, ...engagementCards];
+  }, [posts]);
+
+  useEffect(() => {
+    if (liveAnnouncements.length <= 1) return undefined;
+
+    const timer = window.setInterval(() => {
+      setAnnouncementIndex((prev) => (prev + 1) % liveAnnouncements.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [liveAnnouncements]);
+
+  useEffect(() => {
+    if (announcementIndex >= liveAnnouncements.length) {
+      setAnnouncementIndex(0);
+    }
+  }, [announcementIndex, liveAnnouncements.length]);
 
   const syncUserReputation = (reward) => {
     if (!reward) return;
@@ -670,9 +711,29 @@ const SocialDashboard = ({ user, reports = [] }) => {
   }
 
   return (
-    <div className={`min-h-screen theme-surface theme-${theme}`}>
-      <header className="sticky top-0 z-40 border-b border-theme bg-theme-card/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className={`min-h-screen theme-surface theme-${theme}`}>
+        <header className="sticky top-0 z-40 border-b border-theme bg-theme-card/95 backdrop-blur">
+          {liveAnnouncements[announcementIndex] && (
+            <div className={`border-b px-4 py-2 text-xs font-semibold sm:px-6 lg:px-8 ${
+              liveAnnouncements[announcementIndex].tone === 'live'
+                ? 'border-red-500/20 bg-red-500/10 text-red-200'
+                : liveAnnouncements[announcementIndex].tone === 'engagement'
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                  : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+            }`}>
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+                <span className="truncate">{liveAnnouncements[announcementIndex].text}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowLive(true)}
+                  className="shrink-0 rounded-full border border-current/30 px-3 py-1 text-[11px] uppercase tracking-wide hover:bg-white/10"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 <img src="/econet-logo.jpeg" alt="EcoNet logo" className="h-9 w-9 rounded-2xl object-cover shadow-md" />

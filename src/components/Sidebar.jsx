@@ -1,4 +1,4 @@
-function Sidebar({ user, onLogout, onNavigate, isMobileMenuOpen, onMobileMenuToggle }) {
+function Sidebar({ user, isAuthenticated, onLogout, onNavigate, onToggleCommandMode, isMobileMenuOpen, onMobileMenuToggle }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -36,11 +36,12 @@ function Sidebar({ user, onLogout, onNavigate, isMobileMenuOpen, onMobileMenuTog
             </div>
             <nav className="space-y-5 text-green-100">
               <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Dashboard</button>
+              <button onClick={() => { onToggleCommandMode?.(); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-emerald-200 hover:text-white">Command Mode</button>
               <button onClick={() => { onNavigate('/submit'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Report Event</button>
               <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
               <button onClick={() => { onNavigate('/marketplace'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
               <button onClick={() => { onNavigate('/amber-alerts'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
-              {user ? (
+              {isAuthenticated ? (
                 <button onClick={handleLogout} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Logout</button>
               ) : (
                 <button onClick={() => { onNavigate('/login'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Login</button>
@@ -57,11 +58,12 @@ function Sidebar({ user, onLogout, onNavigate, isMobileMenuOpen, onMobileMenuTog
           <Brand />
           <nav className="space-y-5 text-green-100">
             <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Dashboard</button>
+            <button onClick={() => onToggleCommandMode?.()} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-emerald-200 hover:text-white">Command Mode</button>
             <button onClick={() => onNavigate('/submit')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Report Event</button>
             <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
             <button onClick={() => onNavigate('/marketplace')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
             <button onClick={() => onNavigate('/amber-alerts')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
-            {user ? (
+            {isAuthenticated ? (
               <button onClick={handleLogout} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Logout</button>
             ) : (
               <button onClick={() => onNavigate('/login')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Login</button>
