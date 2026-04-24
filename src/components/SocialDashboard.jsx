@@ -162,9 +162,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
     const isCurrentUserPost =
       reportUser.id === activeUser?._id ||
       reportUser._id === activeUser?._id ||
-      reportUser.email === activeUser?.email ||
-      reportUser.name === activeUser?.name ||
-      report.authorName === activeUser?.name;
+      reportUser.email === activeUser?.email;
 
     const media = report.media?.length ? report.media : buildFallbackMedia(report.images || []);
 
@@ -174,7 +172,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
       avatar: resolveMediaUrl(
         isCurrentUserPost
           ? activeUser?.avatar || reportUser.avatar || report.avatar || 'https://picsum.photos/seed/avatar40/40/40.jpg'
-          : reportUser.avatar || report.avatar || activeUser?.avatar || 'https://picsum.photos/seed/avatar40/40/40.jpg'
+          : reportUser.avatar || report.avatar || 'https://picsum.photos/seed/avatar40/40/40.jpg'
       ),
       content: report.content || report.description || 'Community post',
       timestamp: report.timestamp || report.createdAt || new Date().toISOString(),
