@@ -18,19 +18,11 @@ import MainLayout from "./layouts/MainLayout";
 // Components
 import UnifiedButton from "./components/UnifiedButton";
 import SentinelLive from "./components/SentinelLive";
-import ClimatePost from './components/ClimatePost';
-import LiloAI from './components/LiloAI';
-
-const dummyPosts = [
-  { id: 1, urgency: 'low', message: 'Rainfall expected in Lagos!', location: 'Lagos', timestamp: new Date().toISOString() },
-  { id: 2, urgency: 'medium', message: 'Heatwave warning for Kano.', location: 'Kano', timestamp: new Date().toISOString() },
-  { id: 3, urgency: 'high', message: 'Flash flood alert in Abuja.', location: 'Abuja', timestamp: new Date().toISOString() },
-];
 
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isLive, setIsLive] = useState(false);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -48,9 +40,7 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    setUser(null);
+    logout();
     navigate('/login');
   };
 
@@ -98,21 +88,6 @@ function App() {
 
       {isLive && (
         <SentinelLive user={user} onStop={() => navigate('/')} onNavigate={navigate} />
-      )}
-
-      {(currentPath === "/" || currentPath === "") && (
-        <main className="p-4 pb-24 relative z-10">
-          <div className="max-w-md mx-auto space-y-4">
-            {dummyPosts.map((post) => (
-              <ClimatePost key={post.id} {...post} />
-            ))}
-          </div>
-        </main>
-      )}
-
-      {/* LILO AI Assistant - Always visible when logged in */}
-      {user && !isAuthPage && (
-        <LiloAI position="floating" size="medium" />
       )}
         </div>
       </RegionalProvider>

@@ -13,25 +13,43 @@ function detectIntent(text) {
   return 'conversation';
 }
 
-function answerForecast(text) {
-  if (text.includes('tomorrow')) {
-    return "I can help interpret tomorrow's weather, but I don't have live forecast data inside this chat yet. If you tell me your city, I can still explain what conditions to watch for and how heat, rain, or wind could affect you.";
+function extractLocation(text) {
+  const cleaned = text.replace(/[?.!,]/g, ' ');
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const markers = ['in', 'at', 'around', 'near'];
+
+  for (let index = 0; index < words.length; index += 1) {
+    if (!markers.includes(words[index].toLowerCase())) continue;
+    const nextWords = words.slice(index + 1, index + 4);
+    if (nextWords.length) return nextWords.join(' ');
   }
 
-  return "I can talk through weather and climate risk with you. If you share your city or region, I’ll make the guidance more grounded and practical.";
+  return '';
+}
+
+function answerForecast(text) {
+  const location = extractLocation(text);
+
+  if (text.includes('tomorrow')) {
+    return location
+      ? `I can help you think through tomorrow in ${location}, but I need live forecast data wired into LILO before I can give a true weather prediction. What I can do right now is give you a practical risk read for that location: heat build-up, rainfall risk, flooding pressure, wind exposure, and how those conditions may affect transport, power, and outdoor safety.`
+      : "I can help interpret tomorrow's weather, but I don't have live forecast data inside this chat yet. Tell me your city and I'll still give you a practical risk-focused read on heat, rain, flooding, or wind.";
+  }
+
+  return "I can talk through weather and climate risk with you. If you share your city or region, I'll make the guidance more grounded and practical.";
 }
 
 function answerRegionalClimate(text) {
   if (text.includes('heat') && text.includes('nigeria')) {
-    return "That concern is valid. Rising heat in Nigeria usually means more heat stress, drier surfaces in some regions, pressure on water access, and more health risk for children, elders, and outdoor workers. If you want, I can help you turn that concern into a clear climate post or a monitored command signal.";
+    return "That concern is valid. Rising heat in Nigeria usually means more heat stress, drier surfaces in some regions, pressure on water access, lower outdoor productivity, and more health risk for children, elders, and outdoor workers. The most practical things to watch are daily temperature spikes, grid pressure, water strain, crop stress, and whether communities are reporting fires or air-quality issues alongside the heat. If you want, I can turn that concern into a clear climate post or a monitored command signal.";
   }
 
-  return "Regional climate pressure often shows up as heat stress, flooding patterns, water strain, crop disruption, and air quality changes. Tell me the state or city you're focused on and I’ll respond more specifically.";
+  return "Regional climate pressure often shows up as heat stress, flooding patterns, water strain, crop disruption, and air quality changes. Tell me the state or city you're focused on and I'll respond more specifically.";
 }
 
 function answerIncident(text) {
   if (text.includes('fire')) {
-    return "That sounds serious. If you're safe, send the nearest location, how visible the fire is, and whether homes, roads, or power lines are close. I’ll treat it as a potential critical signal.";
+    return "That sounds serious. If you're safe, send the nearest location, how visible the fire is, and whether homes, roads, or power lines are close. I'll treat it as a potential critical signal.";
   }
 
   if (text.includes('flood')) {
@@ -45,16 +63,42 @@ function answerIncident(text) {
   return "That does sound like a real environmental signal. Give me the location, what you can visibly confirm, and whether people or infrastructure are at immediate risk.";
 }
 
+function answerGreeting(memory) {
+  const userTurns = memory.filter((entry) => entry.role === 'user').length;
+  return userTurns === 0
+    ? "I'm here with you. Tell me what you're seeing, what you're worried about, or what decision you need help making."
+    : "Still with you. Give me the next detail and I'll stay concrete.";
+}
+
+function answerConversation(text, memory) {
+  const lastUserMessage = [...memory].reverse().find((entry) => entry.role === 'user')?.content;
+
+  if (/thank(s| you)/i.test(text)) {
+    return "You're welcome. If you want, we can keep going and turn this into a cleaner report, a social post, or a command signal.";
+  }
+
+  if (/worried|concerned|afraid|anxious/.test(text)) {
+    return "That makes sense. Tell me what exactly is changing around you or in your area, and I'll help separate a general concern from something that needs reporting or monitoring.";
+  }
+
+  if (/what should i do|next step|what now/.test(text)) {
+    return "Next step depends on what kind of signal this is. If people or infrastructure are at immediate risk, send location, severity, and evidence. If it's a trend or concern, describe the pattern, area, and why it matters. I'll help route it properly.";
+  }
+
+  if (lastUserMessage) {
+    return `I hear you. Compared with what you said earlier about "${lastUserMessage}", this still needs one or two concrete details. Give me the location, what changed, and how serious it looks, and I'll answer much more directly.`;
+  }
+
+  return "I follow you. Give me a bit more detail on location, what happened, or what answer you need, and I'll stay concrete instead of guessing.";
+}
+
 function humanizeResponse(input, memory) {
   const text = input.trim();
   const lower = text.toLowerCase();
   const intent = detectIntent(lower);
-  const messageCount = memory.filter((entry) => entry.role === 'user').length;
 
   if (intent === 'greeting') {
-    return messageCount === 0
-      ? "I'm here with you. Ask me something real, or tell me what you're seeing and I’ll help you make sense of it."
-      : "Still with you. What do you want to figure out right now?";
+    return answerGreeting(memory);
   }
 
   if (intent === 'identity') {
@@ -74,10 +118,10 @@ function humanizeResponse(input, memory) {
   }
 
   if (intent === 'guidance') {
-    return "We can work through it together. If this is an incident, send location, what happened, how severe it looks, and any photo or video. If it’s more of a concern or trend, I can help turn it into a strong climate post.";
+    return "We can work through it together. If this is an incident, send location, what happened, how severe it looks, and any photo or video. If it's more of a concern or trend, I can help turn it into a strong climate post.";
   }
 
-  return "I follow you. Give me a bit more detail and I’ll respond more concretely instead of guessing.";
+  return answerConversation(lower, memory);
 }
 
 export default function useLilo() {

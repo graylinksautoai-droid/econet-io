@@ -2,129 +2,121 @@ import React, { useState } from "react";
 import useLilo from "../hooks/useLilo";
 import { useVoiceInterface } from "../hooks/useVoiceInterface";
 import { useLiloContext } from "../hooks/useLiloContext";
+import { useTheme } from "../context/ThemeContext";
 
 const LiloAI = () => {
   const { messages, send, clear, activate, deactivate, isActive, mood } = useLilo();
-  const { isListening, isSpeaking } = useVoiceInterface();
+  const { isListening } = useVoiceInterface();
   const context = useLiloContext();
+  const { theme } = useTheme();
   const [input, setInput] = useState("");
   const [showChat, setShowChat] = useState(false);
 
+  function handleSend() {
+    if (!input.trim() || !isActive) return;
+    send(input);
+    setInput("");
+  }
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      {/* LILO Toggle Button */}
       {!showChat && (
         <button
           onClick={() => setShowChat(true)}
-          className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all ${
-            isActive 
-              ? 'bg-green-600 hover:bg-green-700 text-white' 
-              : 'bg-gray-600 hover:bg-gray-700 text-white'
+          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all ${
+            isActive ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-600 text-white hover:bg-gray-700'
           }`}
           title={`LILO ${isActive ? 'Active' : 'Inactive'} - ${mood}`}
         >
-          <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-300'}`}></div>
+          <div className={`h-3 w-3 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-300'}`}></div>
         </button>
       )}
 
-      {/* Chat Window */}
       {showChat && (
-        <div className="w-80 bg-white shadow-lg rounded-lg border border-gray-200 mb-2">
-          {/* Header */}
-          <div className="p-3 bg-gray-800 text-white rounded-t-lg flex justify-between items-center">
+        <div className="mb-2 w-[min(92vw,24rem)] rounded-2xl border border-theme bg-theme-card shadow-2xl backdrop-blur">
+          <div className="flex items-center justify-between rounded-t-2xl border-b border-theme bg-theme-muted p-3 text-theme-primary">
             <div className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
-              <span className="font-medium text-sm">LILO Assistant</span>
+              <img src="/econet-logo.jpeg" alt="EcoNet logo" className="h-8 w-8 rounded-xl object-cover" />
+              <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+              <span className="text-sm font-medium">LILO Assistant</span>
               <span className="text-xs opacity-70">({mood})</span>
             </div>
             <div className="flex items-center space-x-2">
               <button
                 onClick={isActive ? deactivate : activate}
-                className={`px-2 py-1 rounded text-xs ${
-                  isActive 
-                    ? 'bg-red-600 hover:bg-red-700' 
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
+                className={`rounded px-2 py-1 text-xs ${isActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
               >
                 {isActive ? 'OFF' : 'ON'}
               </button>
-              <button
-                onClick={() => setShowChat(false)}
-                className="text-gray-300 hover:text-white text-lg"
-              >
+              <button onClick={() => setShowChat(false)} className="text-lg text-theme-secondary hover:text-theme-primary">
                 ×
               </button>
             </div>
           </div>
 
-          <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            <div>Page: <span className="font-semibold capitalize">{context.currentPage}</span></div>
+          <div className="border-b border-theme bg-theme-card px-3 py-2 text-xs text-theme-secondary">
+            <div>Page: <span className="font-semibold capitalize text-theme-primary">{context.currentPage}</span></div>
             {context.regionalAlerts[0] && (
-              <div className="mt-1">Regional alert: <span className="font-semibold">{context.regionalAlerts[0].message}</span></div>
+              <div className="mt-1">Regional alert: <span className="font-semibold text-theme-primary">{context.regionalAlerts[0].message}</span></div>
             )}
+            <div className="mt-1">Theme: <span className="font-semibold capitalize text-theme-primary">{theme}</span></div>
           </div>
 
-          {/* Messages */}
-          <div className="p-3 h-60 overflow-y-auto bg-gray-50">
+          <div className="h-60 overflow-y-auto bg-theme-card p-3">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 text-sm py-8">
-                {isActive ? 'LILO is active. Say hello!' : 'Click ON to activate LILO'}
+              <div className="py-8 text-center text-sm text-theme-secondary">
+                {isActive ? 'LILO is active. Start naturally and I will stay practical.' : 'Click ON to activate LILO'}
               </div>
             )}
-            
-            {messages.map((m, i) => (
+
+            {messages.map((message, index) => (
               <div
-                key={i}
-                className={`mb-2 p-2 rounded max-w-[85%] ${
-                  m.role === 'assistant' 
-                    ? 'bg-blue-100 text-blue-800' 
-                    : m.role === 'system'
-                    ? 'bg-yellow-100 text-yellow-800 text-xs'
-                    : 'bg-gray-100 text-gray-800 ml-auto'
+                key={index}
+                className={`mb-2 max-w-[85%] rounded p-2 ${
+                  message.role === 'assistant'
+                    ? 'border border-emerald-500/20 bg-emerald-500/10 text-theme-primary'
+                    : message.role === 'system'
+                      ? 'border border-amber-500/20 bg-amber-500/10 text-theme-primary text-xs'
+                      : 'ml-auto bg-theme-muted text-theme-primary'
                 }`}
               >
-                <div className="text-sm">{m.content}</div>
-                <div className="text-xs opacity-70 mt-1">
-                  {new Date(m.timestamp).toLocaleTimeString()}
+                <div className="text-sm">{message.content}</div>
+                <div className="mt-1 text-xs opacity-70">
+                  {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Input */}
-          <div className="flex p-3 border-t border-gray-200">
+          <div className="flex border-t border-theme p-3">
             <input
               id="lilo-input"
               name="lilo-input"
-              className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+              className="flex-1 rounded border border-theme bg-theme-card px-2 py-1 text-sm text-theme-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && handleSend()}
               placeholder={isListening ? "Listening..." : "Type your message..."}
               disabled={isListening || !isActive}
             />
             <button
               onClick={handleSend}
-              className="ml-2 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="ml-2 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
               disabled={!input.trim() || isListening || !isActive}
             >
               Send
             </button>
           </div>
-          
-          {/* Status */}
-          <div className="px-3 pb-2 flex justify-between items-center">
+
+          <div className="flex items-center justify-between px-3 pb-2">
             {isListening && (
-              <div className="text-xs text-red-600 flex items-center">
-                <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse mr-2"></div>
+              <div className="flex items-center text-xs text-red-500">
+                <div className="mr-2 h-2 w-2 animate-pulse rounded-full bg-red-600"></div>
                 Listening...
               </div>
             )}
             {messages.length > 0 && (
-              <button
-                onClick={clear}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
+              <button onClick={clear} className="text-xs text-theme-secondary hover:text-theme-primary">
                 Clear chat
               </button>
             )}
@@ -133,13 +125,6 @@ const LiloAI = () => {
       )}
     </div>
   );
-
-  function handleSend() {
-    if (!input.trim() || !isActive) return;
-    
-    send(input);
-    setInput("");
-  }
 };
 
 export default LiloAI;

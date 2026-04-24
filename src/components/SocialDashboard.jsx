@@ -402,6 +402,10 @@ const SocialDashboard = ({ user, reports = [] }) => {
 
   const createPost = async () => {
     if ((!newPost.trim() && attachedMedia.length === 0) || isProcessing) return;
+    if (!token || !activeUser) {
+      setComposerError('Sign in to publish a shared post across devices. Guest mode can browse, but it cannot sync the feed.');
+      return;
+    }
 
     setIsProcessing(true);
     setComposerError('');
@@ -670,10 +674,10 @@ const SocialDashboard = ({ user, reports = [] }) => {
       <header className="sticky top-0 z-40 border-b border-theme bg-theme-card/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-green-600 to-blue-600 text-sm font-bold text-white">EN</div>
-              <span className="text-xl font-bold text-theme-primary">EcoNet IO</span>
-            </div>
+              <div className="flex items-center space-x-2">
+                <img src="/econet-logo.jpeg" alt="EcoNet logo" className="h-9 w-9 rounded-2xl object-cover shadow-md" />
+                <span className="text-xl font-bold text-theme-primary">EcoNet IO</span>
+              </div>
             <button
               onClick={() => setShowLive(true)}
               className="flex items-center space-x-2 rounded-full border border-white/20 bg-red-500/85 px-3 py-1 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:bg-red-600/90"
