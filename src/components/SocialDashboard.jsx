@@ -847,10 +847,10 @@ const SocialDashboard = ({ user, reports = [] }) => {
         )}
 
         <div className="flex flex-col gap-6 lg:flex-row">
-          <main className={`flex-1 ${sidebarOpen ? 'hidden md:block' : ''}`}>
+          <main className="flex-1">
             <div className="mb-6 rounded-2xl border border-theme bg-theme-card p-4 shadow-sm">
               <div className="flex space-x-3">
-                <img src={resolveMediaUrl(activeUser?.avatar) || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face'} alt={activeUser?.name} className="h-10 w-10 rounded-full object-cover" />
+                <img src={resolveMediaUrl(activeUser?.avatar) || '/econet-logo.jpeg'} alt={activeUser?.name} className="h-10 w-10 rounded-full object-cover" />
                 <div className="flex-1">
                   <div className="relative">
                     <textarea
@@ -1073,7 +1073,7 @@ const SocialDashboard = ({ user, reports = [] }) => {
             </div>
           </main>
 
-          <aside className={`w-full space-y-6 md:w-80 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
+          <aside className="order-2 w-full space-y-6 md:w-80 lg:order-none">
             <div className="rounded-2xl border border-theme bg-theme-card p-4 shadow-sm">
               <h2 className="mb-3 text-lg font-semibold text-theme-primary">Economy Loop</h2>
               <div className="grid grid-cols-2 gap-3">

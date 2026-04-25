@@ -7,6 +7,7 @@ import MapView from '../components/MapView';
 import { useFeed } from '../features/dashboard/hooks/useFeed';
 import { useAuth } from '../context/AuthContext';
 import { isCommandEligible } from '../services/postSignal';
+import { getApiBaseUrl } from '../services/runtimeConfig';
 
 const MainLayout = ({ user, onLogout, onNavigate, children }) => {
   const { user: currentUser, token } = useAuth();
@@ -15,13 +16,61 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
   const [showSplash, setShowSplash] = useState(true);
   const [isCommandMode, setIsCommandMode] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const feed = useFeed('for-you', activeUser?.token);
+  const [commandMapReports, setCommandMapReports] = useState([]);
+  const feed = useFeed('for-you', token);
   const commandReports = feed.reports.filter((report) => isCommandEligible(report));
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCommandReports = async () => {
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/map/reports`);
+        if (!response.ok) {
+          throw new Error(`Map reports failed: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const features = payload?.features || [];
+        const mappedReports = features.map((feature) => ({
+          id: feature.properties?.id,
+          category: feature.properties?.category,
+          severity: feature.properties?.severity,
+          postStatus: feature.properties?.postStatus,
+          trustScore: feature.properties?.trustScore,
+          aiScore: feature.properties?.aiScore,
+          content: feature.properties?.summary || feature.properties?.category || 'Command signal',
+          location: {
+            lon: feature.geometry?.coordinates?.[0],
+            lat: feature.geometry?.coordinates?.[1],
+            coordinates: feature.geometry?.coordinates
+          }
+        }));
+
+        if (!ignore) {
+          setCommandMapReports(mappedReports);
+        }
+      } catch (error) {
+        console.warn('Command map reports fallback to feed data:', error);
+        if (!ignore) {
+          setCommandMapReports([]);
+        }
+      }
+    };
+
+    loadCommandReports();
+    const interval = window.setInterval(loadCommandReports, 15000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(interval);
+    };
+  }, [feed.reports.length, token]);
 
   const handleToggleCommandMode = () => {
     setShowSplash(true);
@@ -88,7 +137,7 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
           {isCommandMode && (
             <div className="w-full lg:w-[70%] h-full min-h-0 flex flex-col bg-gray-900 absolute lg:relative inset-0 z-0 lg:z-10">
               {activeUser ? (
-                <MapView reports={commandReports} />
+                <MapView reports={commandMapReports.length > 0 ? commandMapReports : commandReports} />
               ) : (
                 <div className="p-4 text-center opacity-80">
                   Geospatial command view is locked.
