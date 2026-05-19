@@ -13,6 +13,7 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
   const { user: currentUser, token } = useAuth();
   const activeUser = currentUser || user;
   const isAuthenticated = Boolean(token && currentUser);
+  const isStandaloneCommandRoute = window.location.pathname === '/command';
   const [showSplash, setShowSplash] = useState(true);
   const [isCommandMode, setIsCommandMode] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -73,11 +74,12 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
   }, [feed.reports.length, token]);
 
   const handleToggleCommandMode = () => {
-    setShowSplash(true);
-    setTimeout(() => {
-      setIsCommandMode(prev => !prev);
-      setShowSplash(false);
-    }, 500);
+    if (isStandaloneCommandRoute) {
+      onNavigate('/');
+      return;
+    }
+
+    onNavigate('/command');
   };
 
   if (showSplash) {
@@ -115,12 +117,12 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
         <Navbar
           onNavigate={onNavigate}
           onToggleCommandMode={handleToggleCommandMode}
-          isCommandMode={isCommandMode}
+          isCommandMode={isCommandMode || isStandaloneCommandRoute}
           isMobileMenuOpen={isMobileMenuOpen}
           onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
         <div className="flex-1 flex overflow-hidden">
-          <div className={`transition-all duration-300 overflow-auto ${isCommandMode ? 'w-full lg:w-[30%] absolute inset-0 lg:relative z-10 bg-white/90 lg:bg-transparent backdrop-blur-sm lg:backdrop-blur-none' : 'w-full'}`}>
+          <div className={`transition-all duration-300 overflow-auto ${isCommandMode && !isStandaloneCommandRoute ? 'w-full lg:w-[30%] absolute inset-0 lg:relative z-10 bg-white/90 lg:bg-transparent backdrop-blur-sm lg:backdrop-blur-none' : 'w-full'}`}>
             {React.Children.map(children, child => {
               if (React.isValidElement(child)) {
                 // Only pass isCommandMode to components that might need it
@@ -134,7 +136,7 @@ const MainLayout = ({ user, onLogout, onNavigate, children }) => {
               return child;
             })}
           </div>
-          {isCommandMode && (
+          {isCommandMode && !isStandaloneCommandRoute && (
             <div className="w-full lg:w-[70%] h-full min-h-0 flex flex-col bg-gray-900 absolute lg:relative inset-0 z-0 lg:z-10">
               {activeUser ? (
                 <MapView reports={commandMapReports.length > 0 ? commandMapReports : commandReports} />
