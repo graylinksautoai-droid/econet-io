@@ -1,13 +1,63 @@
+import { createClient } from '@supabase/supabase-js';
 import { getApiBaseUrl } from '../../../services/runtimeConfig.js';
 
+const OFFLINE_POSTS_KEY = 'econet_offline_posts';
+const POSTS_TABLE = 'posts';
+const SUPABASE_REQUEST_TIMEOUT_MS = 15000;
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'econet-io-feed-service'
+        }
+      }
+    })
+  : null;
+
+const isBrowser = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const createLocalPostId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `local-${crypto.randomUUID()}`;
+  }
+
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const normalizeSupabaseError = (error) => {
+  if (!error) return 'Unknown Supabase error';
+  return error.message || error.details || String(error);
+};
+
 /**
- * Feed service - handles all feed-related API calls
+ * Feed service - handles all feed-related data access.
+ *
+ * Netlify builds talk directly to the Supabase `posts` table for global post
+ * sync while retaining the existing server endpoints for engagement actions.
  */
 export class FeedService {
   constructor() {
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
     this.apiBaseUrl = getApiBaseUrl();
+    this.supabase = supabase;
+
+    if (isBrowser()) {
+      window.addEventListener('online', () => {
+        this.syncOfflinePosts().catch((error) => {
+          console.error('FEED SERVICE: Online sync failed:', error);
+        });
+      });
+    }
   }
 
   createTimeoutController(timeoutMs) {
@@ -19,202 +69,248 @@ export class FeedService {
     };
   }
 
+  assertSupabaseReady() {
+    if (!this.supabase) {
+      throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+    }
+  }
+
+  getOfflinePosts() {
+    if (!isBrowser()) return [];
+
+    try {
+      const storedPosts = window.localStorage.getItem(OFFLINE_POSTS_KEY);
+      return storedPosts ? JSON.parse(storedPosts) : [];
+    } catch (error) {
+      console.error('FEED SERVICE: Failed to read offline posts:', error);
+      return [];
+    }
+  }
+
+  setOfflinePosts(posts) {
+    if (!isBrowser()) return;
+    window.localStorage.setItem(OFFLINE_POSTS_KEY, JSON.stringify(posts));
+  }
+
+  cacheOfflinePost(postData, error = null) {
+    const offlinePost = {
+      ...postData,
+      id: postData.id || createLocalPostId(),
+      localId: postData.localId || createLocalPostId(),
+      synced: false,
+      syncError: error ? normalizeSupabaseError(error) : null,
+      createdAt: postData.createdAt || postData.created_at || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const posts = this.getOfflinePosts();
+    const nextPosts = [offlinePost, ...posts.filter((post) => post.localId !== offlinePost.localId && post.id !== offlinePost.id)];
+    this.setOfflinePosts(nextPosts);
+    return offlinePost;
+  }
+
+  toSupabasePost(postData) {
+    const now = new Date().toISOString();
+    const cleanPostData = { ...postData };
+    delete cleanPostData.localId;
+    delete cleanPostData.syncError;
+    delete cleanPostData.synced;
+
+    return {
+      ...cleanPostData,
+      content: cleanPostData.content || cleanPostData.description || '',
+      description: cleanPostData.description || cleanPostData.content || '',
+      synced: true,
+      created_at: cleanPostData.created_at || cleanPostData.createdAt || now,
+      updated_at: now
+    };
+  }
+
+  normalizeRemotePost(post) {
+    return {
+      ...post,
+      id: post.id,
+      content: post.content || post.description || '',
+      description: post.description || post.content || '',
+      createdAt: post.createdAt || post.created_at,
+      updatedAt: post.updatedAt || post.updated_at,
+      timestamp: post.timestamp || post.createdAt || post.created_at,
+      synced: post.synced !== false
+    };
+  }
+
+  async insertSupabasePost(postData) {
+    this.assertSupabaseReady();
+
+    if (isBrowser() && navigator.onLine === false) {
+      throw new Error('Device is offline. Post queued for sync.');
+    }
+
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Supabase post request timed out.')), SUPABASE_REQUEST_TIMEOUT_MS);
+    });
+
+    const insert = this.supabase
+      .from(POSTS_TABLE)
+      .insert(this.toSupabasePost(postData))
+      .select()
+      .single();
+
+    const { data, error } = await Promise.race([insert, timeout]);
+
+    if (error) {
+      throw error;
+    }
+
+    return this.normalizeRemotePost(data);
+  }
+
   /**
-   * Fetch feed data
+   * Fetch feed data from Supabase, merging queued offline posts for the current device.
    */
-  async fetchFeed(filter = 'for-you', token = null) {
+  async fetchFeed(filter = 'for-you') {
     try {
       console.log('FEED SERVICE: Fetching feed with filter:', filter);
-      
-      const url = `${this.apiBaseUrl}/reports/feed?filter=${filter}`;
-      const timeout = this.createTimeoutController(12000);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        signal: timeout.controller.signal
-      });
-      timeout.clear();
+      this.assertSupabaseReady();
 
-      console.log('FEED SERVICE: Response status:', response.status);
+      const { data, error } = await this.supabase
+        .from(POSTS_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-      if (!response.ok) {
-        throw new Error(`Feed fetch failed: ${response.status}`);
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
-      
-      // Cache the result
+      const remotePosts = (data || []).map((post) => this.normalizeRemotePost(post));
+      const offlinePosts = this.getOfflinePosts().filter((post) => post.synced === false);
+      const feedData = [...offlinePosts, ...remotePosts];
+
       this.cache.set(filter, {
-        data,
+        data: feedData,
         timestamp: Date.now()
       });
 
       console.log('FEED SERVICE: Feed fetched successfully');
       return {
         success: true,
-        data: data,
+        data: feedData,
         fromCache: false
       };
-
     } catch (error) {
       console.error('FEED SERVICE: Fetch failed:', error);
-      
-      // Try to return cached data if available
+
       const cached = this.cache.get(filter);
       if (cached && (Date.now() - cached.timestamp < this.cacheTimeout)) {
-        console.log('FEED SERVICE: Returning cached data');
         return {
           success: true,
           data: cached.data,
           fromCache: true
         };
       }
-      
-      // Return demo data as fallback
-      console.log('FEED SERVICE: Returning demo data as fallback');
+
       return {
         success: true,
-        data: [
-          {
-            id: 'demo-1',
-            description: 'Fire detected in industrial area - immediate response needed',
-            content: 'Fire detected in industrial area - immediate response needed',
-            category: 'Fire',
-            severity: 'Critical',
-            urgency: 'Immediate',
-            postStatus: 'critical',
-            signalSource: 'social',
-            location: { text: 'Abuja', lat: 9.0579, lon: 7.4951 },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 88,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Fire', '#Emergency', '#Climate'],
-            images: ['https://picsum.photos/seed/fire1/400/300.jpg'],
-            liloClassification: {
-              isClimateRelated: true,
-              confidence: 88,
-              summary: 'LILO escalated this fire signal to command mode.',
-              matchedSignals: ['fire'],
-              routedToCommand: true
-            },
-            user: {
-              name: 'Abuja Fire Dept',
-              avatar: 'https://picsum.photos/seed/demo1/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 85
-            }
-          },
-          {
-            id: 'demo-2',
-            description: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
-            content: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
-            category: 'Flood',
-            severity: 'Moderate',
-            urgency: 'Observation',
-            postStatus: 'observe',
-            signalSource: 'social',
-            location: { text: 'Lagos Victoria Island', lat: 6.5244, lon: 3.3792 },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 82,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Flood', '#Emergency', '#Climate'],
-            images: ['https://picsum.photos/seed/flood1/400/300.jpg'],
-            liloClassification: {
-              isClimateRelated: true,
-              confidence: 82,
-              summary: 'LILO marked this flood post for observation.',
-              matchedSignals: ['flood'],
-              routedToCommand: true
-            },
-            user: {
-              name: 'Lagos Emergency',
-              avatar: 'https://picsum.photos/seed/demo2/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 78
-            }
-          },
-          {
-            id: 'demo-3',
-            description: 'Community cleanup this weekend. Bring gloves and water.',
-            content: 'Community cleanup this weekend. Bring gloves and water.',
-            category: 'Other',
-            severity: 'Low',
-            urgency: 'Low',
-            postStatus: 'regular',
-            signalSource: 'social',
-            location: { text: '', lat: null, lon: null },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 12,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Community', '#Cleanup'],
-            images: [],
-            liloClassification: {
-              isClimateRelated: false,
-              confidence: 12,
-              summary: 'LILO kept this update in the social feed.',
-              matchedSignals: [],
-              routedToCommand: false
-            },
-            user: {
-              name: 'Port Harcourt Monitor',
-              avatar: 'https://picsum.photos/seed/demo3/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 92
-            }
-          }
-        ],
-        fromCache: false
+        data: this.getOfflinePosts(),
+        fromCache: false,
+        offline: true,
+        error: normalizeSupabaseError(error)
       };
     }
   }
 
   /**
-   * Create a new post
+   * Create a new post through Supabase. Failed network/offline writes are queued locally.
    */
-  async createPost(postData, token = null) {
+  async createPost(postData) {
     try {
       console.log('FEED SERVICE: Creating post:', postData);
-      const timeout = this.createTimeoutController(25000);
-      
-      const response = await fetch(`${this.apiBaseUrl}/reports`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(postData),
-        signal: timeout.controller.signal
-      });
-      timeout.clear();
+      const post = await this.insertSupabasePost(postData);
+      await this.syncOfflinePosts();
 
-      console.log('FEED SERVICE: Create post response status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`Post creation failed: ${response.status}`);
-      }
-
-      const data = await response.json();
+      this.clearCache();
       console.log('FEED SERVICE: Post created successfully');
       return {
         success: true,
-        data: data
+        data: {
+          report: post,
+          post
+        }
       };
-
     } catch (error) {
-      console.error('FEED SERVICE: Create post failed:', error);
+      console.error('FEED SERVICE: Create post failed; caching locally:', error);
+      const offlinePost = this.cacheOfflinePost(postData, error);
+      this.clearCache();
+
       return {
         success: false,
-        error: error.name === 'AbortError' ? 'Post request timed out before the upload completed.' : error.message
+        offline: true,
+        error: normalizeSupabaseError(error),
+        data: {
+          report: offlinePost,
+          post: offlinePost
+        }
+      };
+    }
+  }
+
+  /**
+   * Push locally cached posts to Supabase when connectivity returns.
+   */
+  async syncOfflinePosts() {
+    const offlinePosts = this.getOfflinePosts().filter((post) => post.synced === false);
+
+    if (!offlinePosts.length) {
+      return {
+        success: true,
+        synced: 0,
+        failed: 0,
+        remaining: 0
+      };
+    }
+
+    try {
+      this.assertSupabaseReady();
+
+      if (isBrowser() && navigator.onLine === false) {
+        throw new Error('Device is offline.');
+      }
+
+      const syncedPosts = [];
+      const failedPosts = [];
+
+      for (const post of offlinePosts) {
+        try {
+          const syncedPost = await this.insertSupabasePost(post);
+          syncedPosts.push(syncedPost);
+        } catch (error) {
+          failedPosts.push({
+            ...post,
+            syncError: normalizeSupabaseError(error),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      this.setOfflinePosts(failedPosts);
+      this.clearCache();
+
+      return {
+        success: failedPosts.length === 0,
+        synced: syncedPosts.length,
+        failed: failedPosts.length,
+        remaining: failedPosts.length,
+        data: syncedPosts
+      };
+    } catch (error) {
+      console.error('FEED SERVICE: Offline sync failed:', error);
+      return {
+        success: false,
+        synced: 0,
+        failed: offlinePosts.length,
+        remaining: offlinePosts.length,
+        error: normalizeSupabaseError(error)
       };
     }
   }
@@ -227,7 +323,7 @@ export class FeedService {
       const response = await fetch(`${this.apiBaseUrl}/reports/${postId}/like`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         }
       });
 
@@ -239,7 +335,6 @@ export class FeedService {
         success: true,
         data: await response.json()
       };
-
     } catch (error) {
       console.error('FEED SERVICE: Like post failed:', error);
       return {
@@ -258,7 +353,7 @@ export class FeedService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ text: comment })
       });
@@ -271,7 +366,6 @@ export class FeedService {
         success: true,
         data: await response.json()
       };
-
     } catch (error) {
       console.error('FEED SERVICE: Comment on post failed:', error);
       return {
@@ -289,7 +383,7 @@ export class FeedService {
       const response = await fetch(`${this.apiBaseUrl}/reports/${postId}/share`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         }
       });
 
@@ -301,7 +395,6 @@ export class FeedService {
         success: true,
         data: await response.json()
       };
-
     } catch (error) {
       console.error('FEED SERVICE: Share post failed:', error);
       return {
