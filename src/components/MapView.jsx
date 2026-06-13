@@ -18,11 +18,31 @@ const mapPopupStyles = `
 `;
 
 const MapView = ({ activeIncident, reports = [] }) => {
+  const mapWrapper = useRef(null);
   const mapContainer = useRef(null);
   const map = useRef(null);
   const activePopup = useRef(null); // Keep track of open popups
+  const resizeFrame = useRef(null);
   const [loading, setLoading] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const requestMapResize = useCallback(() => {
+    if (resizeFrame.current) {
+      cancelAnimationFrame(resizeFrame.current);
+    }
+
+    resizeFrame.current = requestAnimationFrame(() => {
+      resizeFrame.current = null;
+
+      if (!map.current) return;
+
+      try {
+        map.current.resize();
+      } catch (error) {
+        console.warn('MapView: Error during resize:', error);
+      }
+    });
+  }, []);
 
   // Inject custom styles
   useEffect(() => {
@@ -187,16 +207,13 @@ const MapView = ({ activeIncident, reports = [] }) => {
 
       setLoading(false);
       setIsLoaded(true);
-      setTimeout(() => {
-        map.current?.resize();
-        map.current?.invalidateSize?.();
-      }, 100);
+      requestMapResize();
     } catch (error) {
       console.error('MapView: Error loading report data:', error);
       setLoading(false);
       setIsLoaded(true);
     }
-  }, []);
+  }, [requestMapResize]);
 
   // Handle Clicks
   useEffect(() => {
@@ -242,6 +259,11 @@ const MapView = ({ activeIncident, reports = [] }) => {
   // Cleanup effect
   useEffect(() => {
     return () => {
+      if (resizeFrame.current) {
+        cancelAnimationFrame(resizeFrame.current);
+        resizeFrame.current = null;
+      }
+
       if (map.current) {
         map.current.remove();
         map.current = null;
@@ -251,19 +273,16 @@ const MapView = ({ activeIncident, reports = [] }) => {
 
   // 2. RESIZE HANDLING
   useEffect(() => {
-    const handleResize = () => {
-      if (map.current && isLoaded) {
-        try {
-          map.current.resize();
-        } catch (error) {
-          console.warn('MapView: Error during resize:', error);
-        }
-      }
-    };
+    if (!mapWrapper.current || typeof ResizeObserver === 'undefined') return undefined;
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isLoaded]);
+    const observer = new ResizeObserver(() => {
+      requestMapResize();
+    });
+
+    observer.observe(mapWrapper.current);
+
+    return () => observer.disconnect();
+  }, [requestMapResize]);
 
   // 3. ACTIVE INCIDENT SYNC
   useEffect(() => {
@@ -341,28 +360,29 @@ const MapView = ({ activeIncident, reports = [] }) => {
             type: 'FeatureCollection',
             features: features
           });
-          map.current.resize();
+          requestMapResize();
         }
       } catch (error) {
         console.warn('MapView: Error updating source data:', error);
       }
     }
-  }, [reports, isLoaded]);
+  }, [reports, isLoaded, requestMapResize]);
 
   // Initialize map
   useEffect(() => {
-    if (!mapContainer.current) return;
+    if (!mapContainer.current || map.current) return undefined;
 
     // Set loading timeout
     const loadingTimeout = setTimeout(() => {
       console.log('Map loading timeout - forcing load complete');
       setLoading(false);
       setIsLoaded(true);
+      requestMapResize();
     }, 10000); // 10 second timeout
 
     try {
       console.log('Initializing map with container:', mapContainer.current);
-      map.current = new maplibregl.Map({
+      const mapInstance = new maplibregl.Map({
         container: mapContainer.current,
         style: {
           version: 8,
@@ -385,35 +405,36 @@ const MapView = ({ activeIncident, reports = [] }) => {
         minZoom: 2,
         maxZoom: 20
       });
+      map.current = mapInstance;
       
-      console.log('Map initialized:', map.current);
+      console.log('Map initialized:', mapInstance);
 
       let mapLoaded = false;
 
-      map.current.on('load', () => {
+      mapInstance.on('load', () => {
         if (mapLoaded) return; // Prevent multiple calls
         mapLoaded = true;
         clearTimeout(loadingTimeout);
         console.log('Map loaded successfully');
         
         // Add zoom controls
-        map.current.addControl(new maplibregl.NavigationControl({
+        mapInstance.addControl(new maplibregl.NavigationControl({
           visualizePitch: true,
           showZoom: true,
           showCompass: true
         }));
         
         // Add scale control
-        map.current.addControl(new maplibregl.ScaleControl({
+        mapInstance.addControl(new maplibregl.ScaleControl({
           maxWidth: 80,
           unit: 'metric'
         }));
         
         // Enable fullscreen control
-        map.current.addControl(new maplibregl.FullscreenControl());
+        mapInstance.addControl(new maplibregl.FullscreenControl());
         
         // Add geolocate control
-        map.current.addControl(new maplibregl.GeolocateControl({
+        mapInstance.addControl(new maplibregl.GeolocateControl({
           positionOptions: {
             enableHighAccuracy: true
           },
@@ -422,46 +443,58 @@ const MapView = ({ activeIncident, reports = [] }) => {
         }));
         
         // Enable mouse wheel zoom
-        map.current.scrollZoom.zoomDelta = 1;
+        mapInstance.scrollZoom.zoomDelta = 1;
         
         // Enable double click zoom
-        map.current.doubleClickZoom.enable();
+        mapInstance.doubleClickZoom.enable();
         
         // Enable drag to pan
-        map.current.dragPan.enable();
+        mapInstance.dragPan.enable();
         
         // Enable touch zoom/rotate
-        map.current.touchZoomRotate.enable();
+        mapInstance.touchZoomRotate.enable();
         
         loadReportData();
+        requestMapResize();
       });
 
-      map.current.on('error', (e) => {
+      mapInstance.on('error', (e) => {
         clearTimeout(loadingTimeout);
         console.error('Map load error:', e);
         setLoading(false);
         setIsLoaded(true);
         
         // Try fallback dark style
-        if (map.current) {
-          map.current.setStyle('https://tiles.openstreetmap.org/styles/osm-liberty/style.json');
+        if (map.current === mapInstance) {
+          mapInstance.setStyle('https://tiles.openstreetmap.org/styles/osm-liberty/style.json');
           console.log('Switched to fallback dark map style');
         }
       });
 
       return () => {
         clearTimeout(loadingTimeout);
+        if (map.current === mapInstance) {
+          mapInstance.remove();
+          map.current = null;
+        }
       };
     } catch (error) {
       clearTimeout(loadingTimeout);
       console.error('Map initialization failed:', error);
-      setLoading(false);
-      setIsLoaded(true);
+      queueMicrotask(() => {
+        setLoading(false);
+        setIsLoaded(true);
+      });
+      return undefined;
     }
-  }, []);
+  }, [loadReportData, requestMapResize]);
 
   return (
-    <div className="relative w-full h-full min-h-[420px] bg-slate-900 rounded-lg overflow-hidden" style={{ height: '100%' }}>
+    <div
+      ref={mapWrapper}
+      className="relative w-full h-full min-h-[420px] overflow-hidden touch-none bg-slate-900 rounded-lg"
+      style={{ height: '100%' }}
+    >
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20 backdrop-blur-sm">
           <div className="flex flex-col items-center">
@@ -472,7 +505,7 @@ const MapView = ({ activeIncident, reports = [] }) => {
         </div>
       )}
       
-      <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden" style={{ height: '100%' }} />
+      <div ref={mapContainer} className="w-full h-full overflow-hidden touch-none rounded-lg" style={{ height: '100%' }} />
     </div>
   );
 };
