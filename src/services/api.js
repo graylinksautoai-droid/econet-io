@@ -21,6 +21,12 @@ export const API_ENDPOINTS = {
     CHECKOUT: `${API_BASE_URL}/marketplace/checkout`,
     ORDERS: `${API_BASE_URL}/marketplace/orders`
   },
+  // Payments (Paystack via backend)
+  PAYMENTS: {
+    STATUS: `${API_BASE_URL}/payments/status`,
+    INITIALIZE: `${API_BASE_URL}/payments/initialize`,
+    VERIFY: (reference) => `${API_BASE_URL}/payments/verify/${encodeURIComponent(reference)}`
+  },
   
   // Profile
   PROFILE: {
@@ -55,6 +61,13 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS: {
     SUBSCRIBE: `${API_BASE_URL}/notifications/subscribe`,
     UNSUBSCRIBE: `${API_BASE_URL}/notifications/unsubscribe`
+  },
+
+  // Chat (persistent direct messaging)
+  CHAT: {
+    CONVERSATIONS: `${API_BASE_URL}/chat/conversations`,
+    START: `${API_BASE_URL}/chat/conversations/start`,
+    MESSAGES: (convId) => `${API_BASE_URL}/chat/conversations/${encodeURIComponent(convId)}/messages`
   }
 };
 

@@ -1,10 +1,17 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Report from '../models/Report.js';
 
 const router = express.Router();
 
+function isMongoReady() { return mongoose.connection.readyState === 1; }
+function dbUnavailable(res) {
+  return res.status(503).json({ error: 'Service temporarily unavailable — database not connected.', code: 'DATABASE_UNAVAILABLE' });
+}
+
 // GET /api/map/reports - GeoJSON of reports with coordinates
 router.get('/reports', async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const reports = await Report.find({
       'liloClassification.isClimateRelated': true,

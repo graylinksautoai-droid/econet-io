@@ -1,4 +1,28 @@
 import { getStore } from '@netlify/blobs';
+import bcrypt from 'bcryptjs';
+
+/**
+ * SECURITY — PASSWORD HASHING:
+ * All passwords are hashed with bcryptjs (pure JS, esbuild-compatible, no
+ * native binaries required) before storage. Plaintext passwords are NEVER
+ * written to Netlify Blobs.
+ *
+ * MIGRATION PATH:
+ * Existing accounts created before this fix may have plaintext passwords
+ * stored in Blobs. The login handler detects these by checking whether the
+ * stored value starts with a bcrypt sentinel ($2a/$2b/$2y). If it does not,
+ * the handler attempts a plaintext comparison for backward compatibility,
+ * rehashes on success, and persists the hash. After one successful login the
+ * account is transparently migrated. Plaintext comparison is never logged
+ * or returned in a response.
+ *
+ * NETLIFY AUTHENTICATION STATUS:
+ * Netlify authentication is ACTIVE — it serves the Netlify beta deployment.
+ * It is a simplified auth layer separate from the canonical Engine 01 Identity
+ * Engine. Migration to Engine 01 is planned but not yet scheduled.
+ */
+
+const BCRYPT_ROUNDS = 10;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,41 +30,50 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 };
 
-const seededUsers = [
-  {
-    id: 'demo-user',
-    name: 'Demo User',
-    email: 'demo@econet.io',
-    password: 'password123',
-    avatar: '/econet-logo.jpeg',
-    bio: '',
-    phone: '',
-    location: '',
-    website: '',
-    verifiedReporter: true,
-    reputation: {
-      trustScore: 85,
-      verifiedReports: 12,
-      totalReports: 20,
-      leaves: 340,
-      ecoCoins: 90,
-      seeds: 90
-    },
-    settings: {
-      security: {
-        e2eeEnabled: false,
-        geospatialSalting: false
-      },
-      dataSync: {
-        progressiveSyncPref: 'Standard',
-        bitrateThrottling: false
-      },
-      appearance: {
-        theme: 'light'
+// SECURITY: The seeded demo user password is read from an environment variable,
+// never hardcoded in source. If NETLIFY_DEMO_PASSWORD is not set, the seeded
+// user is omitted entirely and the login endpoint will return 401 for all
+// credentials until real users are registered.
+const DEMO_PASSWORD = process.env.NETLIFY_DEMO_PASSWORD;
+
+const seededUsers = DEMO_PASSWORD
+  ? [
+      {
+        id: 'demo-user',
+        name: 'Demo User',
+        email: 'demo@econet.io',
+        // Password is stored as a bcrypt hash — the plaintext is never persisted.
+        password: bcrypt.hashSync(DEMO_PASSWORD, BCRYPT_ROUNDS),
+        avatar: '/econet-logo.jpeg',
+        bio: '',
+        phone: '',
+        location: '',
+        website: '',
+        verifiedReporter: true,
+        reputation: {
+          trustScore: 85,
+          verifiedReports: 12,
+          totalReports: 20,
+          leaves: 340,
+          ecoCoins: 90,
+          seeds: 90
+        },
+        settings: {
+          security: {
+            e2eeEnabled: false,
+            geospatialSalting: false
+          },
+          dataSync: {
+            progressiveSyncPref: 'Standard',
+            bitrateThrottling: false
+          },
+          appearance: {
+            theme: 'light'
+          }
+        }
       }
-    }
-  }
-];
+    ]
+  : [];
 
 const seededReports = [
   {
@@ -360,9 +393,38 @@ export async function handler(event) {
     if (path.endsWith('/auth/login') && httpMethod === 'POST') {
       const users = await loadUsers();
       const { email, password } = JSON.parse(body || '{}');
-      const user = users.find((entry) => entry.email === email);
 
-      if (!user || user.password !== password) {
+      // Reject missing credentials before any user lookup.
+      if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+        return json(400, { error: 'email and password are required' });
+      }
+
+      const user = users.find((entry) => entry.email === email);
+      if (!user) {
+        return json(401, { error: 'Invalid credentials' });
+      }
+
+      const storedHash = user.password || '';
+      const isBcryptHash = /^\$2[aby]\$/.test(storedHash);
+
+      let passwordOk = false;
+
+      if (isBcryptHash) {
+        // Normal path — compare against stored bcrypt hash.
+        passwordOk = await bcrypt.compare(password, storedHash);
+      } else {
+        // Migration path — stored value is a legacy plaintext password.
+        // Verify by direct comparison (never logged), then rehash and save.
+        // The plaintext value is never returned or logged.
+        passwordOk = storedHash === password;
+        if (passwordOk) {
+          user.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
+          await saveUser(user);
+          console.log('[auth] Migrated legacy plaintext password to bcrypt hash for user:', user.id);
+        }
+      }
+
+      if (!passwordOk) {
         return json(401, { error: 'Invalid credentials' });
       }
 
@@ -378,15 +440,29 @@ export async function handler(event) {
       const users = await loadUsers();
       const { name, email, password } = JSON.parse(body || '{}');
 
+      // Basic input validation before touching the user store.
+      if (!name || typeof name !== 'string' || name.trim() === '') {
+        return json(400, { error: 'name is required' });
+      }
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return json(400, { error: 'A valid email is required' });
+      }
+      if (!password || typeof password !== 'string' || password.length < 6) {
+        return json(400, { error: 'password must be at least 6 characters' });
+      }
+
       if (users.some((entry) => entry.email === email)) {
         return json(400, { error: 'User already exists' });
       }
 
+      // Hash the password before storage. Plaintext is never written to Blobs.
+      const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
       const user = {
         id: `user-${Date.now()}`,
-        name,
+        name: name.trim(),
         email,
-        password,
+        password: hashedPassword,
         avatar: '/econet-logo.jpeg',
         bio: '',
         phone: '',

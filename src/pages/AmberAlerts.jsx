@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import MainLayout from '../layouts/MainLayout';
 import AlertRoutingService from '../services/AlertRoutingService';
+import { getApiBaseUrl } from '../services/runtimeConfig';
 import { FaExclamationTriangle, FaMapMarkerAlt, FaPhone, FaClock, FaShareAlt, FaBell, FaEye, FaRoute, FaShieldAlt, FaBuilding, FaUsers, FaAmbulance, FaFire, FaHospital } from 'react-icons/fa';
 
 function AmberAlerts({ user, onLogout, onNavigate }) {
@@ -13,138 +13,80 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
   const [routingAnalysis, setRoutingAnalysis] = useState(null);
   const [showRouting, setShowRouting] = useState(false);
 
-  // Mock amber alerts data with critical flagging
-  const mockAlerts = [
-    {
-      id: 'ALT-2024-001',
-      type: 'amber',
-      severity: 'critical',
-      title: 'Missing Child - National Emergency Response Required',
-      description: '8-year-old female child missing from residential area. Last seen wearing blue dress and carrying pink backpack. National interest case requiring immediate federal response.',
-      location: 'EcoNet Community Center, Lagos',
-      coordinates: { lat: 6.5244, lng: 3.3792 },
-      lastSeen: '2024-04-09T14:30:00Z',
-      reportedBy: 'Lagos State Emergency Services',
-      contact: {
-        phone: '+234-800-AMBER-01',
-        email: 'emergency@ecosafe.ng'
-      },
-      status: 'active',
-      radius: 10,
-      image: 'https://via.placeholder.com/300x200/FF0000/FFFFFF?text=MISSING+CHILD',
-      flagged: true,
-      nationalInterest: true,
-      timeSensitive: true,
-      casualties: 0,
-      infrastructureImpact: false,
-      category: 'missing_persons',
-      keywords: ['missing_child', 'amber_alert', 'critical'],
-      details: {
-        age: '8 years',
-        height: '4\'2"',
-        weight: '35 kg',
-        hair: 'Black, shoulder length',
-        eyes: 'Brown',
-        distinguishing: 'Small scar on left cheek'
-      },
-      routing: {
-        priority: 'critical',
-        channels: ['sms', 'push', 'email', 'broadcast', 'emergency_broadcast'],
-        estimatedReach: 50000,
-        responseRate: 87,
-        authoritiesNotified: ['NEMA', 'NPF', 'REDCROSS', 'FMOH']
-      }
-    },
-    {
-      id: 'ENV-2024-002',
-      type: 'environmental',
-      severity: 'critical',
-      title: 'Chemical Spill - National Infrastructure Emergency',
-      description: 'Major industrial chemical spill near residential area and critical infrastructure. Immediate federal response required. Potential national disaster situation.',
-      location: 'Industrial Zone, Port Harcourt',
-      coordinates: { lat: 4.8156, lng: 7.0498 },
-      lastSeen: '2024-04-09T13:15:00Z',
-      reportedBy: 'Environmental Protection Agency',
-      contact: {
-        phone: '+234-800-ENV-001',
-        email: 'emergency@epa.ng'
-      },
-      status: 'active',
-      radius: 15,
-      image: 'https://via.placeholder.com/300x200/FFA500/FFFFFF?text=CHEMICAL+SPILL',
-      flagged: true,
-      nationalInterest: true,
-      timeSensitive: true,
-      casualties: 0,
-      infrastructureImpact: true,
-      category: 'chemical_spill',
-      keywords: ['chemical_spill', 'infrastructure', 'evacuation', 'critical'],
-      details: {
-        chemical: 'Industrial solvent - toxic',
-        windDirection: 'Northeast',
-        evacuation: 'Mandatory',
-        shelters: ['Community Center A', 'Sports Complex B'],
-        affectedInfrastructure: ['Power Plant', 'Water Treatment', 'Highway Bridge']
-      },
-      routing: {
-        priority: 'critical',
-        channels: ['sms', 'push', 'email', 'broadcast', 'emergency_broadcast', 'siren'],
-        estimatedReach: 100000,
-        responseRate: 95,
-        authoritiesNotified: ['NEMA', 'FEMA', 'NPF', 'REDCROSS', 'FMOH', 'SEMA']
-      }
-    },
-    {
-      id: 'CLI-2024-003',
-      type: 'climate',
-      severity: 'medium',
-      title: 'Flash Flood Warning',
-      description: 'Heavy rainfall causing flash flooding in low-lying areas. Avoid waterlogged roads and seek higher ground.',
-      location: 'Coastal Communities, Delta State',
-      coordinates: { lat: 5.5882, lng: 5.6732 },
-      lastSeen: '2024-04-09T12:00:00Z',
-      reportedBy: 'National Emergency Management Agency',
-      contact: {
-        phone: '+234-800-FLOOD-01',
-        email: 'emergency@nema.ng'
-      },
-      status: 'monitoring',
-      radius: 15,
-      image: 'https://via.placeholder.com/300x200/0066CC/FFFFFF?text=FLASH+FLOOD',
-      details: {
-        rainfall: '150mm in 6 hours',
-        waterLevel: '2.5m above normal',
-        affected: '12 communities',
-        forecast: 'Continued rain expected'
-      },
-      routing: {
-        priority: 'medium',
-        channels: ['sms', 'push', 'radio'],
-        estimatedReach: 35000,
-        responseRate: 78
-      }
-    }
-  ];
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [alertsError, setAlertsError] = useState("");
+  const [flashMsg, setFlashMsg] = useState('');
+
+  const flash = (msg) => {
+    setFlashMsg(msg);
+    setTimeout(() => setFlashMsg(''), 4000);
+  };
 
   useEffect(() => {
-    // Load alerts
-    setAlerts(mockAlerts);
-    
-    // Set first alert as active if none selected
-    if (mockAlerts.length > 0 && !activeAlert) {
-      setActiveAlert(mockAlerts[0]);
-    }
+    // Load REAL critical field reports from the persisted feed. Official
+    // emergency alerts are NOT generated by EcoNet — no trusted external
+    // emergency source is integrated, so absent real critical reports the UI
+    // shows an honest empty state rather than a fabricated alert.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/reports/feed`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const reports = await res.json();
+        const list = Array.isArray(reports) ? reports : [];
+        const critical = list
+          .filter(r => ['Critical', 'High'].includes(r.severity) || r.postStatus === 'critical')
+          .map(r => ({
+            id: r._id || r.id,
+            type: 'environmental',
+            severity: (r.severity || 'medium').toLowerCase(),
+            title: r.title || `${r.category || 'Environmental'} report — ${r.location?.text || 'location unconfirmed'}`,
+            description: r.content || r.description || '',
+            location: r.location?.text || 'Location not confirmed',
+            coordinates: r.location?.coordinates
+              ? { lng: r.location.coordinates[0], lat: r.location.coordinates[1] }
+              : null,
+            lastSeen: r.createdAt,
+            reportedBy: r.user?.name || 'EcoNet field reporter',
+            contact: r.contact && typeof r.contact === 'object'
+              ? {
+                  phone: r.contact.phone || 'Emergency line: 112',
+                  email: r.contact.email || 'Not provided',
+                }
+              : { phone: 'Emergency line: 112', email: 'Not provided' },
+            status: r.status || 'reported',
+            radius: 10,
+            image: Array.isArray(r.images) && r.images.length ? r.images[0] : null,
+            trustScore: r.trustScore ?? r.user?.reputation?.trustScore ?? null,
+            // Honest routing state — nothing has been delivered to any agency.
+            routing: { status: 'RECOMMENDED', delivered: false, estimatedReach: null, authoritiesNotified: [] }
+          }));
+        if (cancelled) return;
+        setAlerts(critical);
+        if (critical.length > 0 && !activeAlert) setActiveAlert(critical[0]);
+      } catch (err) {
+        if (!cancelled) setAlertsError('Critical reports could not be loaded. Check your connection and try again.');
+      } finally {
+        if (!cancelled) setAlertsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Analyze routing when active alert changes
   useEffect(() => {
-    if (activeAlert) {
+    if (!activeAlert) return;
+    try {
       const analysis = routingService.analyzeAlert(activeAlert);
       setRoutingAnalysis(analysis);
+    } catch (err) {
+      console.warn('[AmberAlerts] routing analysis failed:', err.message);
+      setRoutingAnalysis(null);
     }
   }, [activeAlert, routingService]);
 
   const handleRouteToAlert = (alert) => {
+    if (!alert?.coordinates) return;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -162,25 +104,23 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
   };
 
   const handleExecuteRouting = async () => {
-    if (routingAnalysis) {
+    if (!routingAnalysis) return;
+    try {
       const notifications = await routingService.executeRouting(routingAnalysis.routingPlan);
-      alert(`Routing executed! ${notifications.length} authorities notified.`);
+      flash(`Routing executed: ${notifications.length} notification(s) sent.`);
+    } catch (err) {
+      flash(`Routing failed: ${err.message}`);
     }
   };
 
   const handleShareAlert = (alert) => {
-    const shareText = `URGENT: ${alert.title}\n\nLocation: ${alert.location}\nDetails: ${alert.description}\n\nContact: ${alert.contact.phone}\n\nPlease share this alert widely!`;
+    const contactPhone = alert?.contact?.phone || 'Emergency line: 112';
+    const shareText = `URGENT: ${alert.title}\n\nLocation: ${alert.location}\nDetails: ${alert.description}\n\nContact: ${contactPhone}\n\nPlease share this alert widely!`;
     
     if (navigator.share) {
-      navigator.share({
-        title: alert.title,
-        text: shareText,
-        url: window.location.href
-      });
+      navigator.share({ title: alert.title, text: shareText, url: window.location.href }).catch(() => {});
     } else {
-      // Fallback - copy to clipboard
-      navigator.clipboard.writeText(shareText);
-      alert('Alert details copied to clipboard!');
+      navigator.clipboard?.writeText(shareText).then(() => flash('Alert details copied to clipboard!')).catch(() => {});
     }
   };
 
@@ -218,8 +158,12 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
   };
 
   return (
-    <MainLayout user={user} onLogout={onLogout} onNavigate={onNavigate}>
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="eco-page eco-fade-up">
+      {flashMsg && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg text-sm font-medium">
+          {flashMsg}
+        </div>
+      )}
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -270,11 +214,17 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Alert Image */}
               <div className="lg:col-span-1">
-                <img 
-                  src={activeAlert.image} 
-                  alt={activeAlert.title}
-                  className="w-full h-48 object-cover rounded-lg"
-                />
+                {activeAlert.image ? (
+                  <img
+                    src={activeAlert.image}
+                    alt={activeAlert.title}
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                ) : (
+                  <div className="w-full h-48 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 text-sm">
+                    No field image attached
+                  </div>
+                )}
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">Alert ID:</span>
@@ -326,7 +276,7 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
                   </button>
                   
                   <button
-                    onClick={() => window.open(`tel:${activeAlert.contact.phone}`)}
+                    onClick={() => window.open(`tel:${activeAlert.contact?.phone || '112'}`)}
                     className="flex flex-col items-center justify-center p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
                   >
                     <FaPhone className="w-5 h-5 mb-1" />
@@ -360,11 +310,11 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Phone:</p>
-                      <p className="font-medium">{activeAlert.contact.phone}</p>
+                      <p className="font-medium">{activeAlert.contact?.phone || 'Emergency line: 112'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Email:</p>
-                      <p className="font-medium">{activeAlert.contact.email}</p>
+                      <p className="font-medium">{activeAlert.contact?.email || 'Not provided'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Last Updated:</p>
@@ -378,7 +328,7 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
         )}
 
         {/* Routing Analysis Section */}
-        {showRouting && routingAnalysis && (
+        {showRouting && routingAnalysis && routingAnalysis.routingPlan && (
           <div className="mb-8 bg-white rounded-lg border-2 border-red-500 shadow-lg">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -529,11 +479,11 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Phone:</p>
-                <p className="font-medium">{activeAlert.contact.phone}</p>
+                <p className="font-medium">{activeAlert.contact?.phone || 'Emergency line: 112'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Email:</p>
-                <p className="font-medium">{activeAlert.contact.email}</p>
+                <p className="font-medium">{activeAlert.contact?.email || 'Not provided'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Last Updated:</p>
@@ -561,6 +511,20 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">All Active Alerts</h3>
+            {alertsLoading ? (
+              <p className="text-gray-500 py-6">Loading critical reports…</p>
+            ) : alertsError ? (
+              <p className="text-red-600 py-6">{alertsError}</p>
+            ) : alerts.length === 0 ? (
+              <div className="p-6 rounded-lg border border-gray-200 bg-white">
+                <p className="font-semibold text-gray-900 mb-2">No verified emergency alerts</p>
+                <p className="text-sm text-gray-600">
+                  EcoNet does not generate emergency alerts. No trusted emergency source is integrated on this
+                  deployment, and there are currently no critical field reports requiring escalation. When a
+                  verified source is connected, genuine alerts will appear here with their source and provenance.
+                </p>
+              </div>
+            ) : (
             <div className="space-y-4">
               {alerts.map((alert) => (
                 <div
@@ -591,7 +555,7 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
                           </span>
                           <span className="flex items-center">
                             <FaEye className="w-3 h-3 mr-1" />
-                            {alert.routing.estimatedReach.toLocaleString()} reached
+                            {alert.trustScore != null ? `trust ${alert.trustScore}` : 'trust unrated'}
                           </span>
                         </div>
                       </div>
@@ -610,6 +574,7 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           {/* Routing Analytics */}
@@ -617,64 +582,29 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
             <h3 className="text-xl font-semibold text-gray-900 mb-4">Routing Analytics</h3>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Total Reach</span>
-                    <span className="text-sm font-bold text-gray-900">
-                      {alerts.reduce((sum, alert) => sum + alert.routing.estimatedReach, 0).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: '75%' }}></div>
-                  </div>
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+                  No agency delivery channel is configured on this deployment. The entries listed here are real
+                  field reports marked RECOMMENDED for routing - none have been transmitted to an authority.
                 </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Response Rate</span>
-                    <span className="text-sm font-bold text-gray-900">85%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-                  </div>
-                </div>
-
                 <div className="border-t pt-4">
-                  <h4 className="font-medium text-gray-900 mb-3">Alert Distribution</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">SMS Notifications</span>
-                      <span className="font-medium">12,450</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Push Notifications</span>
-                      <span className="font-medium">8,230</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Email Alerts</span>
-                      <span className="font-medium">3,120</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Broadcast Messages</span>
-                      <span className="font-medium">2,100</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t pt-4">
-                  <h4 className="font-medium text-gray-900 mb-3">System Status</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">Delivery status</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Alert System</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Online</span>
+                      <span className="text-gray-600">Critical reports loaded</span>
+                      <span className="font-medium">{alerts.length}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Routing Engine</span>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                      <span className="text-gray-600">Contacts delivered</span>
+                      <span className="font-medium">0</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Notification Queue</span>
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Processing</span>
+                      <span className="text-gray-600">Agency acknowledgment</span>
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">Not integrated</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Emergency source feed</span>
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">Not connected</span>
                     </div>
                   </div>
                 </div>
@@ -682,8 +612,8 @@ function AmberAlerts({ user, onLogout, onNavigate }) {
             </div>
           </div>
         </div>
-      </div>
-    </MainLayout>
+    </div>
+    </div>
   );
 }
 

@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react'; 
+/**
+ * Login page — rebuilt for the new EcoNet IO visual system.
+ * No MainLayout wrapper — auth pages use EcoShell with noChrome=true.
+ * Backend: POST /api/auth/login via AuthContext.login()
+ * Security: passwords never stored — email-only remember-me.
+ */
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import MainLayout from '../layouts/MainLayout';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
-function Login({ user, onLogout, onNavigate }) {
+export default function Login({ onNavigate }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -12,48 +17,28 @@ function Login({ user, onLogout, onNavigate }) {
   const [error, setError] = useState('');
   const { login } = useAuth();
 
-  // Load remembered credentials on mount
+  // Restore remembered email. Passwords are NEVER stored client-side.
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem('rememberedEmail');
-    const rememberedPassword = localStorage.getItem('rememberedPassword');
-    
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRemember(true);
-    }
-    if (rememberedPassword) {
-      setPassword(rememberedPassword);
-    }
+    localStorage.removeItem('rememberedPassword'); // legacy cleanup
+    const saved = localStorage.getItem('rememberedEmail');
+    if (saved) { setEmail(saved); setRemember(true); }
   }, []);
+
+  const handleRememberChange = (e) => {
+    setRemember(e.target.checked);
+    if (!e.target.checked) localStorage.removeItem('rememberedEmail');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
-      console.log("Sending login request:", email);
-      
-      // Add visual feedback
-      console.log("Attempting login... Please wait.");
-      
-      const data = await login({ email, password }, { remember });
-      
-      console.log("Login successful:", data);
-      
-      // Handle remember me
-      if (remember) {
-        localStorage.setItem('rememberedEmail', email);
-        localStorage.setItem('rememberedPassword', password);
-      } else {
-        localStorage.removeItem('rememberedEmail');
-        localStorage.removeItem('rememberedPassword');
-      }
-      
+      await login({ email, password }, { remember });
+      if (remember) localStorage.setItem('rememberedEmail', email);
+      else localStorage.removeItem('rememberedEmail');
       onNavigate('/');
-      
     } catch (err) {
-      console.error("Login failed:", err);
       setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -61,117 +46,146 @@ function Login({ user, onLogout, onNavigate }) {
   };
 
   return (
-    <MainLayout user={user} onLogout={onLogout} onNavigate={onNavigate}>
-      {/* Background Image with Overlay */}
-      <div className="fixed inset-0 z-0">
-        <div className="w-full h-full bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/60"></div>
+    <div className="relative min-h-screen flex items-center justify-center px-4 py-12">
+      {/* Atmospheric layers */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse 100% 60% at 50% 100%, rgba(16,60,30,0.5) 0%, transparent 60%)',
+        }} />
       </div>
 
-      {/* Login Form Container */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8 bg-transparent">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-white drop-shadow-lg">
-              Sign in to EcoNet IO
-            </h2>
-          </div>
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div className="rounded-md shadow-sm -space-y-px bg-black/30 backdrop-blur-sm p-4 rounded-lg">
-              <div>
-                <label htmlFor="email-address" className="sr-only">Email address</label>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-white/90"
-                  placeholder="Email address"
-                />
-              </div>
+      <div className="relative z-10 w-full max-w-sm">
+        {/* Real EcoNet logo */}
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src="/econet-logo.jpeg"
+            alt="EcoNet IO"
+            className="w-16 h-16 rounded-2xl object-cover shadow-2xl mb-4"
+            style={{ border: '2px solid rgba(34,197,94,0.4)' }}
+          />
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            EcoNet <span style={{ color: 'var(--eco-green)' }}>IO</span>
+          </h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--eco-text-muted)' }}>Together. For a thriving planet.</p>
+        </div>
+
+        {/* Card */}
+        <div
+          className="rounded-[var(--eco-radius-card)] p-6"
+          style={{
+            background: 'var(--eco-bg-surface)',
+            border: '1px solid var(--eco-border)',
+            boxShadow: 'var(--eco-shadow-card)',
+          }}
+        >
+          <h2 className="text-lg font-bold text-white mb-5">Sign in</h2>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className="block text-xs font-medium mb-1.5" style={{ color: 'var(--eco-text-secondary)' }}>
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-white placeholder:text-[var(--eco-text-muted)] outline-none focus:ring-2 transition-all"
+                style={{
+                  background: 'var(--eco-bg-elevated)',
+                  border: '1px solid var(--eco-border)',
+                  focusRingColor: 'var(--eco-green)',
+                }}
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label htmlFor="password" className="block text-xs font-medium mb-1.5" style={{ color: 'var(--eco-text-secondary)' }}>
+                Password
+              </label>
               <div className="relative">
-                <label htmlFor="password" className="sr-only">Password</label>
                 <input
                   id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-white/90"
-                  placeholder="Password"
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-white placeholder:text-[var(--eco-text-muted)] outline-none focus:ring-2 transition-all"
+                  style={{
+                    background: 'var(--eco-bg-elevated)',
+                    border: '1px solid var(--eco-border)',
+                  }}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute inset-y-0 right-3 flex items-center"
+                  style={{ color: 'var(--eco-text-muted)' }}
                 >
-                  {showPassword ? (
-                    <FaEyeSlash className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                  ) : (
-                    <FaEye className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                  )}
+                  {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center">
+            {/* Remember + Forgot */}
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  id="remember"
-                  name="remember"
                   type="checkbox"
                   checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                  onChange={handleRememberChange}
+                  className="w-3.5 h-3.5 rounded accent-emerald-500"
                 />
-                <label htmlFor="remember" className="ml-2 block text-sm text-white drop-shadow">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <a href="/forgot-password" className="font-medium text-emerald-300 hover:text-emerald-200 drop-shadow">
-                  Forgot your password?
-                </a>
-              </div>
+                <span className="text-xs" style={{ color: 'var(--eco-text-secondary)' }}>Remember email</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => onNavigate('/forgot-password')}
+                className="text-xs transition-opacity hover:opacity-70"
+                style={{ color: 'var(--eco-green)' }}
+              >
+                Forgot password?
+              </button>
             </div>
 
+            {/* Error */}
             {error && (
-              <div className="text-red-300 text-sm text-center bg-red-900/50 p-2 rounded backdrop-blur-sm">
+              <div className="px-3 py-2 rounded-lg text-sm text-red-300 bg-red-900/30 border border-red-500/20">
                 {error}
               </div>
             )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 shadow-lg"
-              >
-                {loading ? 'Signing in...' : 'Sign in'}
-              </button>
-            </div>
-            
-            <div className="text-center text-sm">
-              <span className="text-white drop-shadow">Don't have an account? </span>
-              <button
-                type="button"
-                onClick={() => onNavigate('/register')}
-                className="font-medium text-emerald-300 hover:text-emerald-200 drop-shadow"
-              >
-                Register here
-              </button>
-            </div>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-black transition-opacity disabled:opacity-50"
+              style={{ background: 'var(--eco-green)' }}
+            >
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
           </form>
+
+          <p className="text-center text-xs mt-4" style={{ color: 'var(--eco-text-muted)' }}>
+            Don't have an account?{' '}
+            <button
+              onClick={() => onNavigate('/register')}
+              className="font-medium transition-opacity hover:opacity-70"
+              style={{ color: 'var(--eco-green)' }}
+            >
+              Register
+            </button>
+          </p>
         </div>
       </div>
-    </MainLayout>
+    </div>
   );
 }
-
-export default Login;

@@ -1,0 +1,207 @@
+# Implementation Plan: EcoNet IO Backend Foundation (Architecture Kernel)
+
+Build the foundational **Architecture Kernel** for the EcoNet IO backend strictly following the **EcoNet IO 24-Engine Canon (Revision 2026.4.0-CANONICAL)**.
+
+This milestone establishes the 24-engine module structure, immutable canonical engine registry, shared event/command/query contracts, idempotency infrastructure, audit and governance interfaces, and automated architecture compliance tests—without prematurely implementing external business logic outside canonical boundaries.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Canonical Engine Registry Integrity:**  
+> The 24 canonical engines are registered with their exact canonical IDs (`01` through `24`) and names as defined in the Canon. No engine will be renamed, merged, or omitted.
+> 
+> **Zero Private Cross-Engine Imports:**  
+> The architecture strictly enforces that no engine may directly import internal files of another engine. All inter-engine communication will occur via the public interface (`index.js`), the Event Bus, or the Command/Query Bus.
+> 
+> **Backend vs Automation Team Boundary:**  
+> The backend core owns domain state, validation, persistence, and deterministic execution. Background daemons, agentic reasoning loops, and external cron workflows belong to the Automation layer consuming backend contracts.
+
+---
+
+## Proposed Architectural Layout
+
+```
+econet/
+├── engines/
+│   ├── 01-identity/
+│   ├── 02-observation/
+│   ├── 03-knowledge/
+│   ├── 04-dialogue/
+│   ├── 05-intelligence/
+│   ├── 06-context/
+│   ├── 07-geospatial/
+│   ├── 08-temporal/
+│   ├── 09-risk/
+│   ├── 10-prediction/
+│   ├── 11-mission/
+│   ├── 12-action/
+│   ├── 13-verification/
+│   ├── 14-reputation/
+│   ├── 15-reward/
+│   ├── 16-community/
+│   ├── 17-agent/
+│   ├── 18-digital-twin/
+│   ├── 19-simulation/
+│   ├── 20-integration/
+│   ├── 21-automation/
+│   ├── 22-governance/
+│   ├── 23-audit/
+│   └── 24-learning/
+├── contracts/
+│   ├── commands/
+│   ├── queries/
+│   ├── events/
+│   └── audit/
+├── infrastructure/
+│   ├── messaging/
+│   ├── cqrs/
+│   ├── idempotency/
+│   └── observability/
+├── architecture/
+│   ├── engine-registry/
+│   └── compliance/
+└── tests/
+    └── architecture/
+```
+
+---
+
+## Proposed Changes & Deliverables
+
+### 1. Architecture Kernel & Canonical Engine Registry
+
+#### [NEW] [architecture/engine-registry/CanonicalEngineRegistry.js](file:///c:/Users/user/Desktop/econet/architecture/engine-registry/CanonicalEngineRegistry.js)
+- Define the frozen, immutable registry of all 24 Canonical Engines (01 to 24) with Canonical IDs, Names, Descriptions, Layers, and Status Lifecycles (`REGISTERED`, `INITIALIZED`, `READY`, `DEGRADED`, `STOPPED`).
+- Methods to look up engines by ID, name, or layer.
+- Enforce strict immutability (cannot register Engine 25, cannot alter canonical IDs/names).
+
+#### [NEW] [architecture/engine-registry/EngineLifecycleManager.js](file:///c:/Users/user/Desktop/econet/architecture/engine-registry/EngineLifecycleManager.js)
+- Manages startup, health check, and shutdown lifecycle across all 24 engines.
+
+#### [NEW] [architecture/compliance/BoundaryEnforcer.js](file:///c:/Users/user/Desktop/econet/architecture/compliance/BoundaryEnforcer.js)
+- Static code analysis utility that inspects import statements across the `engines/` directory.
+- Flags any direct imports that bypass an engine's top-level `index.js` (e.g., `import ... from '../02-observation/domain/...'` will fail compliance).
+
+---
+
+### 2. Shared Contracts & Messaging Infrastructure
+
+#### [NEW] [contracts/events/DomainEvent.js](file:///c:/Users/user/Desktop/econet/contracts/events/DomainEvent.js)
+- Canonical JSON schema validator and factory for domain events.
+- Standard fields: `eventId`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `correlationId`, `causationId`, `actor`, `subject`, `payload`, `metadata`.
+
+#### [NEW] [contracts/commands/Command.js](file:///c:/Users/user/Desktop/econet/contracts/commands/Command.js)
+- Standard command structure: `commandId`, `commandType`, `targetEngine`, `issuedAt`, `actor`, `payload`, `correlationId`.
+
+#### [NEW] [contracts/queries/Query.js](file:///c:/Users/user/Desktop/econet/contracts/queries/Query.js)
+- Standard query structure: `queryId`, `queryType`, `targetEngine`, `actor`, `parameters`, `correlationId`.
+
+#### [NEW] [infrastructure/messaging/EventBus.js](file:///c:/Users/user/Desktop/econet/infrastructure/messaging/EventBus.js)
+- Decoupled In-Memory Event Bus supporting typed event subscription, asynchronous non-blocking dispatch, subscriber error isolation, correlation tracking, and dead-letter capture.
+
+#### [NEW] [infrastructure/cqrs/CommandBus.js](file:///c:/Users/user/Desktop/econet/infrastructure/cqrs/CommandBus.js)
+- Single-handler Command Bus enforcing that every command has exactly one authoritative engine handler. Includes middleware pipeline for validation, timing, logging, and idempotency checks.
+
+#### [NEW] [infrastructure/cqrs/QueryBus.js](file:///c:/Users/user/Desktop/econet/infrastructure/cqrs/QueryBus.js)
+- Single-handler Query Bus for side-effect-free data retrieval with response caching hooks.
+
+---
+
+### 3. Core Foundation Capabilities (Idempotency, Audit, Governance)
+
+#### [NEW] [infrastructure/idempotency/IdempotencyManager.js](file:///c:/Users/user/Desktop/econet/infrastructure/idempotency/IdempotencyManager.js)
+- Manages idempotency keys, execution locks, cached responses, and duplicate suppression with configurable TTLs.
+
+#### [NEW] [contracts/audit/AuditJournalEntry.js](file:///c:/Users/user/Desktop/econet/contracts/audit/AuditJournalEntry.js) & [engines/23-audit/index.js](file:///c:/Users/user/Desktop/econet/engines/23-audit/index.js)
+- Cryptographic append-only journal interface.
+- SHA-256 hash chaining connecting each audit entry to the previous entry hash to ensure tamper evidence.
+
+#### [NEW] [contracts/governance/GovernancePolicy.js](file:///c:/Users/user/Desktop/econet/contracts/governance/GovernancePolicy.js) & [engines/22-governance/index.js](file:///c:/Users/user/Desktop/econet/engines/22-governance/index.js)
+- Policy evaluation interface and compliance interceptor pipeline for system operational boundaries.
+
+#### [NEW] [engines/21-automation/index.js](file:///c:/Users/user/Desktop/econet/engines/21-automation/index.js)
+- Backend task queue interface and worker contract establishing the strict boundary between backend queuing and the Automation Team runtime.
+
+---
+
+### 4. 24-Engine Module Skeletons
+
+#### [NEW] `engines/01-identity/` through `engines/24-learning/`
+Every canonical engine directory will be populated with standard modular structure:
+- `index.js`: Public interface exporting engine metadata, command/query handlers, and lifecycle hooks.
+- `contracts/`: Declarative engine commands, queries, and events.
+- `domain/`: Domain entity placeholders and pure services.
+- `persistence/`: Repository interface and persistence port.
+- `README.md`: Formal specification of engine mission, scope, non-scope, and owned concepts.
+
+Canonical list of all 24 engine directories to create:
+1. `engines/01-identity`
+2. `engines/02-observation`
+3. `engines/03-knowledge`
+4. `engines/04-dialogue`
+5. `engines/05-intelligence`
+6. `engines/06-context`
+7. `engines/07-geospatial`
+8. `engines/08-temporal`
+9. `engines/09-risk`
+10. `engines/10-prediction`
+11. `engines/11-mission`
+12. `engines/12-action`
+13. `engines/13-verification`
+14. `engines/14-reputation`
+15. `engines/15-reward`
+16. `engines/16-community`
+17. `engines/17-agent`
+18. `engines/18-digital-twin`
+19. `engines/19-simulation`
+20. `engines/20-integration`
+21. `engines/21-automation`
+22. `engines/22-governance`
+23. `engines/23-audit`
+24. `engines/24-learning`
+
+---
+
+### 5. Automated Architecture Compliance Test Suite
+
+#### [NEW] [tests/architecture/registry.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/registry.test.js)
+- Verifies exact canonical registry compliance: 24 engines, immutable names, IDs 01 to 24, zero missing, zero extra.
+
+#### [NEW] [tests/architecture/boundary.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/boundary.test.js)
+- Scans all engine source code and tests to guarantee zero private internal file imports across engines.
+
+#### [NEW] [tests/architecture/events.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/events.test.js)
+- Validates canonical event contract schemas, correlation/causation ID propagation, and event bus pub/sub mechanics.
+
+#### [NEW] [tests/architecture/cqrs.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/cqrs.test.js)
+- Verifies single-handler routing on CommandBus and QueryBus, validation middleware, and failure isolation.
+
+#### [NEW] [tests/architecture/idempotency.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/idempotency.test.js)
+- Tests deduplication of duplicate commands and cached response playback.
+
+#### [NEW] [tests/architecture/audit-integrity.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/audit-integrity.test.js)
+- Verifies SHA-256 cryptographic hash chaining in the audit journal and tamper detection.
+
+#### [NEW] [tests/architecture/governance.test.js](file:///c:/Users/user/Desktop/econet/tests/architecture/governance.test.js)
+- Verifies governance policy evaluation and command interception.
+
+---
+
+## Verification Plan
+
+### Automated Architecture Tests
+Run the automated test runner (using Node.js native test runner `node --test tests/architecture/*.test.js`) to verify all architectural invariants:
+```bash
+node --test tests/architecture/*.test.js
+```
+
+### Verification Criteria
+1. **Registry Verification:** 24/24 canonical engines registered, initialized, and accessible via public interface.
+2. **Boundary Verification:** AST/regex scan confirms 0 private cross-engine imports.
+3. **Event Bus Invariants:** Event schema validation passes; correlation IDs flow through event cascades.
+4. **CQRS Invariants:** Command handler uniqueness and query execution verified.
+5. **Idempotency Invariants:** Duplicate command keys return identical cached responses without re-execution.
+6. **Audit Invariants:** Hash chain validation succeeds; simulated tampering fails verification.
+7. **Governance Invariants:** Policy rules correctly allow/deny command execution.

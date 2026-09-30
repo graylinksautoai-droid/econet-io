@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);  // 12s — enough for slower connections
       const apiBaseUrl = getApiBaseUrl();
       const res = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
@@ -102,7 +102,16 @@ export const AuthProvider = ({ children }) => {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || data.error || `Login failed: ${res.status}`);
+        // Surface structured backend errors clearly
+        const msg = data.message || data.error || `Login failed (${res.status})`;
+        const code = data.code || 'LOGIN_FAILED';
+        if (code === 'DATABASE_UNAVAILABLE') {
+          throw new Error(
+            'The authentication service is temporarily unavailable. ' +
+            'The database cannot be reached. Try again later or use the development path.'
+          );
+        }
+        throw new Error(msg);
       }
 
       persistAuth({
@@ -114,29 +123,82 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (err) {
       if (err.name === 'AbortError') {
-        const demoUser = {
-          user: {
-            _id: 'demo-user',
-            name: credentials.email.split('@')[0],
-            email: credentials.email,
-            reputation: { trustScore: 85 },
-            verifiedReporter: true
-          },
-          token: `demo-token-${Date.now()}`
-        };
+        // The login request timed out. In development mode an explicit env
+        // flag (VITE_ENABLE_DEMO_FALLBACK=true) may enable an offline
+        // placeholder, but production must never silently grant auth.
+        if (import.meta.env.VITE_ENABLE_DEMO_FALLBACK === 'true') {
+          const demoUser = {
+            user: {
+              _id: 'demo-user',
+              name: credentials.email.split('@')[0],
+              email: credentials.email,
+              reputation: { trustScore: 85 },
+              verifiedReporter: true
+            },
+            token: `demo-token-${Date.now()}`
+          };
 
-        persistAuth({
-          nextUser: demoUser.user,
-          nextToken: demoUser.token,
-          mode: remember ? 'local' : 'session'
-        });
+          persistAuth({
+            nextUser: demoUser.user,
+            nextToken: demoUser.token,
+            mode: remember ? 'local' : 'session'
+          });
 
-        return demoUser;
+          return demoUser;
+        }
+
+        // Production: surface the timeout to the caller so the UI can
+        // show an accurate error instead of a false authenticated state.
+        throw new Error(
+          'Login request timed out. Check your connection and try again.'
+        );
       }
 
       throw err;
     }
   };
+
+  /**
+   * Verify the stored token is still accepted by the server.
+   * Called once at startup when a token is already in storage.
+   * On 401 (stale DEV_AUTH token after server restart, expired JWT, etc.)
+   * the stored credentials are cleared so the user sees the login screen
+   * rather than a broken authenticated state.
+   *
+   * Skipped when the backend is unreachable (network error / timeout) so
+   * an offline user with a valid token is not logged out unnecessarily.
+   */
+  const verifyStoredToken = async (storedToken) => {
+    if (!storedToken) return;
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 5000);
+      const apiBaseUrl = getApiBaseUrl();
+      const res = await fetch(`${apiBaseUrl}/auth/verify`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${storedToken}` },
+        signal: controller.signal
+      });
+      clearTimeout(id);
+      if (res.status === 401 || res.status === 403) {
+        // Token is stale / server doesn't recognise it — clear auth state
+        persistAuth({ nextUser: null, nextToken: null, mode: storageMode });
+      }
+      // 200 → still valid, leave state alone
+      // 503/500 → backend unavailable, leave state alone (don't log out)
+    } catch {
+      // Network error or abort → backend unreachable, keep state as-is
+    }
+  };
+
+  // Verify stored token once on mount — detects stale DEV_AUTH sessions
+  // after a server restart without forcing re-login when offline.
+  useEffect(() => {
+    if (initialAuth.token) {
+      verifyStoredToken(initialAuth.token);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const logout = () => {
     persistAuth({ nextUser: null, nextToken: null, mode: storageMode });

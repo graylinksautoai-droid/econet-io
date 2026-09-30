@@ -64,117 +64,79 @@ export class FeedService {
       const cached = this.cache.get(filter);
       if (cached && (Date.now() - cached.timestamp < this.cacheTimeout)) {
         console.log('FEED SERVICE: Returning cached data');
+        return { success: true, data: cached.data, fromCache: true };
+      }
+
+      // Demo fixture — only active when VITE_ENABLE_MOCK_FEED=true.
+      // In production (flag absent) the caller receives an empty array so the
+      // UI shows its real empty-state rather than silently displaying fake posts.
+      if (import.meta.env.VITE_ENABLE_MOCK_FEED === 'true') {
+        console.warn('FEED SERVICE: backend unreachable — using dev fixture (VITE_ENABLE_MOCK_FEED=true)');
         return {
           success: true,
-          data: cached.data,
-          fromCache: true
+          data: [
+            {
+              id: 'demo-1',
+              description: 'Fire detected in industrial area - immediate response needed',
+              content: 'Fire detected in industrial area - immediate response needed',
+              category: 'Fire', severity: 'Critical', urgency: 'Immediate',
+              postStatus: 'critical', signalSource: 'social',
+              location: { text: 'Abuja', lat: 9.0579, lon: 7.4951 },
+              createdAt: new Date().toISOString(), timestamp: new Date(),
+              aiScore: 88, likes: 0, comments: 0, shares: 0,
+              tags: ['#Fire', '#Emergency', '#Climate'],
+              images: ['https://picsum.photos/seed/fire1/400/300.jpg'],
+              liloClassification: {
+                isClimateRelated: true, confidence: 88,
+                summary: 'LILO escalated this fire signal to command mode.',
+                matchedSignals: ['fire'], routedToCommand: true
+              },
+              user: { name: 'Abuja Fire Dept', avatar: 'https://picsum.photos/seed/demo1/150/150.jpg', verifiedReporter: true, trustScore: 85 }
+            },
+            {
+              id: 'demo-2',
+              description: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
+              content: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
+              category: 'Flood', severity: 'Moderate', urgency: 'Observation',
+              postStatus: 'observe', signalSource: 'social',
+              location: { text: 'Lagos Victoria Island', lat: 6.5244, lon: 3.3792 },
+              createdAt: new Date().toISOString(), timestamp: new Date(),
+              aiScore: 82, likes: 0, comments: 0, shares: 0,
+              tags: ['#Flood', '#Emergency', '#Climate'],
+              images: ['https://picsum.photos/seed/flood1/400/300.jpg'],
+              liloClassification: {
+                isClimateRelated: true, confidence: 82,
+                summary: 'LILO marked this flood post for observation.',
+                matchedSignals: ['flood'], routedToCommand: true
+              },
+              user: { name: 'Lagos Emergency', avatar: 'https://picsum.photos/seed/demo2/150/150.jpg', verifiedReporter: true, trustScore: 78 }
+            },
+            {
+              id: 'demo-3',
+              description: 'Community cleanup this weekend. Bring gloves and water.',
+              content: 'Community cleanup this weekend. Bring gloves and water.',
+              category: 'Other', severity: 'Low', urgency: 'Low',
+              postStatus: 'regular', signalSource: 'social',
+              location: { text: '', lat: null, lon: null },
+              createdAt: new Date().toISOString(), timestamp: new Date(),
+              aiScore: 12, likes: 0, comments: 0, shares: 0,
+              tags: ['#Community', '#Cleanup'], images: [],
+              liloClassification: {
+                isClimateRelated: false, confidence: 12,
+                summary: 'LILO kept this update in the social feed.',
+                matchedSignals: [], routedToCommand: false
+              },
+              user: { name: 'Port Harcourt Monitor', avatar: 'https://picsum.photos/seed/demo3/150/150.jpg', verifiedReporter: true, trustScore: 92 }
+            }
+          ],
+          fromCache: false
         };
       }
-      
-      // Return demo data as fallback
-      console.log('FEED SERVICE: Returning demo data as fallback');
-      return {
-        success: true,
-        data: [
-          {
-            id: 'demo-1',
-            description: 'Fire detected in industrial area - immediate response needed',
-            content: 'Fire detected in industrial area - immediate response needed',
-            category: 'Fire',
-            severity: 'Critical',
-            urgency: 'Immediate',
-            postStatus: 'critical',
-            signalSource: 'social',
-            location: { text: 'Abuja', lat: 9.0579, lon: 7.4951 },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 88,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Fire', '#Emergency', '#Climate'],
-            images: ['https://picsum.photos/seed/fire1/400/300.jpg'],
-            liloClassification: {
-              isClimateRelated: true,
-              confidence: 88,
-              summary: 'LILO escalated this fire signal to command mode.',
-              matchedSignals: ['fire'],
-              routedToCommand: true
-            },
-            user: {
-              name: 'Abuja Fire Dept',
-              avatar: 'https://picsum.photos/seed/demo1/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 85
-            }
-          },
-          {
-            id: 'demo-2',
-            description: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
-            content: 'Severe flooding in Lagos Victoria Island - evacuation in progress',
-            category: 'Flood',
-            severity: 'Moderate',
-            urgency: 'Observation',
-            postStatus: 'observe',
-            signalSource: 'social',
-            location: { text: 'Lagos Victoria Island', lat: 6.5244, lon: 3.3792 },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 82,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Flood', '#Emergency', '#Climate'],
-            images: ['https://picsum.photos/seed/flood1/400/300.jpg'],
-            liloClassification: {
-              isClimateRelated: true,
-              confidence: 82,
-              summary: 'LILO marked this flood post for observation.',
-              matchedSignals: ['flood'],
-              routedToCommand: true
-            },
-            user: {
-              name: 'Lagos Emergency',
-              avatar: 'https://picsum.photos/seed/demo2/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 78
-            }
-          },
-          {
-            id: 'demo-3',
-            description: 'Community cleanup this weekend. Bring gloves and water.',
-            content: 'Community cleanup this weekend. Bring gloves and water.',
-            category: 'Other',
-            severity: 'Low',
-            urgency: 'Low',
-            postStatus: 'regular',
-            signalSource: 'social',
-            location: { text: '', lat: null, lon: null },
-            createdAt: new Date().toISOString(),
-            timestamp: new Date(),
-            aiScore: 12,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            tags: ['#Community', '#Cleanup'],
-            images: [],
-            liloClassification: {
-              isClimateRelated: false,
-              confidence: 12,
-              summary: 'LILO kept this update in the social feed.',
-              matchedSignals: [],
-              routedToCommand: false
-            },
-            user: {
-              name: 'Port Harcourt Monitor',
-              avatar: 'https://picsum.photos/seed/demo3/150/150.jpg',
-              verifiedReporter: true,
-              trustScore: 92
-            }
-          }
-        ],
-        fromCache: false
-      };
+
+      // Production: backend unreachable and no cache — return empty feed.
+      // The UI will show its empty state rather than fake data.
+      console.warn('FEED SERVICE: backend unreachable, returning empty feed. Set VITE_ENABLE_MOCK_FEED=true to use dev fixtures.');
+      return { success: false, data: [], error: error.message };
     }
   }
 
@@ -183,16 +145,25 @@ export class FeedService {
    */
   async createPost(postData, token = null) {
     try {
-      console.log('FEED SERVICE: Creating post:', postData);
+      // Client-side 413 guard: refuse inline base64 payloads before they ever
+      // reach Express/Netlify. Media must be uploaded first via /upload/image.
+      const body = JSON.stringify(postData);
+      const hasInlineData = body.includes('data:image/') || body.includes('data:video/') || body.includes('data:audio/');
+      if (hasInlineData || body.length > 500 * 1024) {
+        return {
+          success: false,
+          error: 'Attachments must be uploaded first (POST /api/upload/image). Inline image data is rejected to avoid HTTP 413.',
+        };
+      }
       const timeout = this.createTimeoutController(25000);
-      
+
       const response = await fetch(`${this.apiBaseUrl}/reports`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(postData),
+        body,
         signal: timeout.controller.signal
       });
       timeout.clear();

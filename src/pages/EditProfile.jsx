@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import MainLayout from '../layouts/MainLayout';
 import { useAuth } from '../context/AuthContext';
-import { API_ENDPOINTS, apiRequest } from '../services/api.js';
+import { API_ENDPOINTS, apiRequest, getAuthToken } from '../services/api.js';
 import { resolveMediaUrl } from '../services/runtimeConfig.js';
 import { 
   HiOutlineUser, 
@@ -16,9 +15,9 @@ import {
 } from 'react-icons/hi';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Your Cloudinary details
-const CLOUDINARY_CLOUD_NAME = 'dp9ffewdb';
-const CLOUDINARY_UPLOAD_PRESET = 'econet_avatar';
+// NOTE: Media upload credentials are managed exclusively on the server side.
+// All avatar uploads are proxied through /api/upload/image.
+// Cloud provider credentials must NEVER appear in frontend source.
 
 function EditProfile({ onNavigate }) {
   const { user, setUser, token } = useAuth();
@@ -126,19 +125,29 @@ function EditProfile({ onNavigate }) {
     localStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
-  // Unified avatar upload function
+  /**
+   * Upload avatar through the server-side endpoint.
+   * The server manages all storage credentials — no cloud provider
+   * configuration is permitted in this file.
+   */
   const uploadAvatar = async (file) => {
+    const token = getAuthToken();
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('image', file);
 
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-      { method: 'POST', body: formData }
-    );
+    const res = await fetch(API_ENDPOINTS.UPLOAD.IMAGE, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
 
     const data = await res.json();
-    return data.secure_url;
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    // Return the RELATIVE path (/uploads/...). The origin must not be baked
+    // into the persisted value — resolveMediaUrl() is applied at render time.
+    return data.data.url;
   };
 
   const handleImageUpload = async (e) => {
@@ -154,6 +163,11 @@ function EditProfile({ onNavigate }) {
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('Image size must be less than 5MB');
+      return;
+    }
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (JPG, PNG, WebP, etc.)');
       return;
     }
 
@@ -381,13 +395,12 @@ function EditProfile({ onNavigate }) {
   ];
 
   return (
-    <MainLayout user={user} onNavigate={onNavigate}>
-      <div className="max-w-5xl mx-auto px-4 py-12">
+    <div className="eco-page eco-fade-up">
         <div className="flex flex-col md:flex-row gap-12">
           
           {/* Left Navigation Sidebar */}
           <div className="md:w-64 space-y-2">
-            <h2 className="text-2xl font-black text-gray-900 mb-8 tracking-tighter">SENTINEL SETTINGS</h2>
+            <h2 className="text-2xl font-black text-white mb-8 tracking-tighter">Settings</h2>
             {sections.map(section => (
               <button
                 key={section.id}
@@ -439,8 +452,22 @@ function EditProfile({ onNavigate }) {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Neural Transcoding Active</p>
-                          <p className="text-xs text-gray-500 max-w-xs">AV1/WebP optimization will be applied to your high-res avatar automatically.</p>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Avatar</p>
+                          <p className="text-xs text-gray-500 max-w-xs">Upload JPG, PNG, or WebP · max 5 MB</p>
+                          {avatar && (
+                            <button type="button"
+                              onClick={() => {
+                                setAvatar('');
+                                const updatedUser = { ...user, avatar: '' };
+                                setUser(updatedUser);
+                                localStorage.setItem('user', JSON.stringify(updatedUser));
+                                localStorage.removeItem('userAvatar');
+                              }}
+                              className="text-xs text-red-500 hover:text-red-700 font-bold transition-colors"
+                            >
+                              Remove avatar
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -452,7 +479,7 @@ function EditProfile({ onNavigate }) {
                             name="profileName"
                             value={name} 
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500 outline-none font-bold" 
+                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-gray-900" 
                           />
                         </div>
                         <div>
@@ -463,7 +490,7 @@ function EditProfile({ onNavigate }) {
                             value={bio} 
                             onChange={(e) => setBio(e.target.value)}
                             rows="4"
-                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-sm" 
+                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-sm text-gray-900" 
                           />
                         </div>
                       </div>
@@ -640,8 +667,7 @@ function EditProfile({ onNavigate }) {
           </div>
 
         </div>
-      </div>
-    </MainLayout>
+    </div>
   );
 }
 

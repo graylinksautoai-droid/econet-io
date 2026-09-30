@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { resolveMediaUrl } from '../services/runtimeConfig';
 
 const Navbar = ({ onNavigate, onToggleCommandMode, isCommandMode }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -53,7 +54,7 @@ const Navbar = ({ onNavigate, onToggleCommandMode, isCommandMode }) => {
           </button>
 
           <div className="hidden space-x-4 lg:flex">
-            <button onClick={() => onNavigate('/')} className="text-secondary transition-colors hover:text-primary">Home</button>
+            <button onClick={() => onNavigate('/')} className="text-secondary transition-colors hover:text-primary">Connect Worlds</button>
             <button onClick={() => onNavigate('/marketplace')} className="text-secondary transition-colors hover:text-primary">Market</button>
             <button onClick={() => onNavigate('/reports')} className="text-secondary transition-colors hover:text-primary">Reports</button>
           </div>
@@ -135,7 +136,7 @@ const Navbar = ({ onNavigate, onToggleCommandMode, isCommandMode }) => {
             <nav className="space-y-1 px-3">
               <button onClick={() => { onNavigate('/'); setIsMobileMenuOpen(false); }} className="group flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-secondary transition-all duration-200 hover:bg-tertiary hover:text-primary">
                 <FaHome className="text-secondary group-hover:text-primary" />
-                <span className="font-medium">Home</span>
+                <span className="font-medium">Connect Worlds</span>
               </button>
               <button onClick={() => { onNavigate('/marketplace'); setIsMobileMenuOpen(false); }} className="group flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-secondary transition-all duration-200 hover:bg-tertiary hover:text-primary">
                 <FaStore className="text-secondary group-hover:text-primary" />
@@ -176,7 +177,7 @@ const Navbar = ({ onNavigate, onToggleCommandMode, isCommandMode }) => {
           <div className="border-t border-theme bg-theme-muted p-4">
             <div className="flex items-center space-x-3">
               <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-tertiary">
-                {user?.avatar ? <img src={user.avatar} alt={user.name || 'User'} className="h-10 w-10 object-cover" /> : <FaUser className="text-primary" />}
+                {user?.avatar ? <img src={resolveMediaUrl(user.avatar)} alt={user.name || 'User'} className="h-10 w-10 object-cover" /> : <FaUser className="text-primary" />}
               </div>
               <div>
                 <p className="text-sm font-medium text-primary">{user ? user.name || 'Sentinel' : 'Guest mode'}</p>

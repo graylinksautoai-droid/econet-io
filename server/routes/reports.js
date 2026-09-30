@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import mongoose from 'mongoose';
 import Report from '../models/Report.js';
 import User from '../models/User.js';
 import Comment from '../models/Comment.js';
@@ -7,6 +8,19 @@ import { protect } from '../middleware/auth.js';
 import { classifyPostSignal } from '../services/postIntelligence.js';
 
 const router = express.Router();
+
+/** Returns true when Mongoose is connected to MongoDB. */
+function isMongoReady() {
+  return mongoose.connection.readyState === 1;
+}
+
+/** Standard 503 response when the database is unavailable. */
+function dbUnavailable(res) {
+  return res.status(503).json({
+    error: 'Service temporarily unavailable — database not connected.',
+    code: 'DATABASE_UNAVAILABLE'
+  });
+}
 
 async function geocodeLocation(locationText) {
   try {
@@ -78,6 +92,7 @@ async function serializeReport(report, viewerId = null) {
 }
 
 router.post('/', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const { description, category, severity, urgency, confidence, summary, location, images, media, signalSource, isLive, proofOfPresence, liveSessionId } = req.body;
 
@@ -166,6 +181,7 @@ router.post('/', protect, async (req, res) => {
 });
 
 router.get('/feed', async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const viewer = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null;
     const reports = await Report.find()
@@ -182,6 +198,7 @@ router.get('/feed', async (req, res) => {
 });
 
 router.get('/feed/following', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const user = await User.findById(req.user._id).populate('following', '_id');
     const followingIds = user.following.map((entry) => entry._id);
@@ -199,6 +216,7 @@ router.get('/feed/following', protect, async (req, res) => {
 });
 
 router.get('/my-reports', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const reports = await Report.find({ user: req.user._id })
       .sort({ createdAt: -1 })
@@ -212,6 +230,7 @@ router.get('/my-reports', protect, async (req, res) => {
 });
 
 router.get('/:id', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const report = await Report.findOne({
       _id: req.params.id,
@@ -230,6 +249,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 router.patch('/:id/status', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const { status } = req.body;
 
@@ -251,6 +271,7 @@ router.patch('/:id/status', protect, async (req, res) => {
 });
 
 router.post('/:id/like', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const report = await Report.findById(req.params.id).populate('user', 'name email reputation verifiedReporter avatar');
     if (!report) {
@@ -279,6 +300,7 @@ router.post('/:id/like', protect, async (req, res) => {
 });
 
 router.post('/:id/share', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const report = await Report.findById(req.params.id).populate('user', 'name email reputation verifiedReporter avatar');
     if (!report) {

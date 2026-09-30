@@ -35,11 +35,11 @@ import { applyRewardToReputation, claimDailyHarvest, readHarvestState, REWARD_RU
 import { resolveMediaUrl } from '../services/runtimeConfig';
 
 const DEFAULT_TRENDING = [
-  { tag: '#ClimateAction', count: 12500, trend: 'up' },
-  { tag: '#FloodWarning', count: 8900, trend: 'up' },
-  { tag: '#AirQuality', count: 6700, trend: 'down' },
-  { tag: '#CarbonNeutral', count: 5430, trend: 'stable' },
-  { tag: '#Renewable', count: 4210, trend: 'up' }
+  { tag: '#ClimateAction', trend: 'up' },
+  { tag: '#FloodWarning', trend: 'up' },
+  { tag: '#AirQuality', trend: 'stable' },
+  { tag: '#CarbonNeutral', trend: 'stable' },
+  { tag: '#Renewable', trend: 'up' }
 ];
 
 const LOCAL_POSTS_KEY = 'econet-local-posts';
@@ -122,13 +122,8 @@ function writeLocalPosts(posts) {
   }
 }
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function fileToDataUrl() {
+  throw new Error('fileToDataUrl is retired: SocialDashboard uses upload-first multipart uploads, never inline base64.');
 }
 
 function getCurrentPosition() {
@@ -409,70 +404,59 @@ const SocialDashboard = ({ user, reports = [] }) => {
     }, 600);
   };
 
-  const createLocalPost = () => {
-    const media = attachedMedia.map((media) => ({
-      type: media.type,
-      url: media.url,
-      name: media.name,
-      mimeType: media.mimeType,
-      duration: media.duration || null
-    }));
-
-    return normalizePost({
-      id: `local-${Date.now()}`,
-      description: newPost.trim(),
-      content: newPost.trim(),
-      createdAt: new Date().toISOString(),
-      images: media.filter((entry) => entry.type === 'image').map((entry) => entry.url),
-      media,
-      signalSource: liveSession?.isLive ? 'command' : 'social',
-      isLive: Boolean(liveSession?.isLive),
-      proofOfPresence: Boolean(liveSession?.proofOfPresence),
-      location: liveSession?.location
-        ? {
-            text: 'Live proof of presence',
-            lat: liveSession.location.lat,
-            lon: liveSession.location.lon
-          }
-        : null,
-      ...classifyClientPost(newPost.trim()),
-      user: {
-        id: activeUser?._id,
-        name: activeUser?.name,
-        avatar: activeUser?.avatar,
-        verifiedReporter: activeUser?.verifiedReporter,
-        trustScore: activeUser?.reputation?.trustScore || 0
-      },
-      isLocalOnly: true
-    });
-  };
-
   const handleAvatarChange = async (event) => {
     const file = event.target.files[0];
+    event.target.value = '';
     if (!file || !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) return;
 
-    const reader = new FileReader();
-    reader.onload = async (loadEvent) => {
-      await setUser({ avatar: loadEvent.target.result });
-    };
-    reader.readAsDataURL(file);
+    // Route through the canonical backend upload so the avatar becomes a
+    // persistent /uploads/ URL. Never persist base64 in auth state.
+    const previewUrl = URL.createObjectURL(file);
+    await setUser({ avatar: previewUrl });
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const uploadRes = await fetch(`${feedService.apiBaseUrl}/upload/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadBody = await uploadRes.json().catch(() => ({}));
+      if (!uploadRes.ok || !uploadBody.success) throw new Error(uploadBody.message || 'Avatar upload failed');
+      URL.revokeObjectURL(previewUrl);
+      const merged = { avatar: uploadBody.data.url };
+      await setUser(merged);
+      localStorage.setItem('userAvatar', uploadBody.data.url);
+    } catch (err) {
+      URL.revokeObjectURL(previewUrl);
+      setComposerError(`Avatar upload failed: ${err.message}. Previous avatar restored.`);
+    }
   };
 
   const handleMediaAttachment = async (event) => {
     const files = Array.from(event.target.files || []);
-    const mediaFiles = await Promise.all(
-      files.map(async (file) => {
+    // Keep raw File handles for the upload-first flow and use lightweight
+    // object URLs for previews. Never store base64 data URLs in state —
+    // a single phone photo becomes multi-MB JSON and triggers HTTP 413.
+    const mediaFiles = files
+      .filter((file) => file && file.size <= 10 * 1024 * 1024)
+      .map((file) => {
         const type = getMediaType(file);
         return {
           file,
-          url: await fileToDataUrl(file),
+          url: URL.createObjectURL(file),
+          previewUrl: URL.createObjectURL(file),
           type,
           mimeType: file.type,
-          name: file.name
+          name: file.name,
         };
-      })
-    );
+      });
+    if (mediaFiles.length < files.length) {
+      setComposerError('Some files were skipped: only files under 10 MB are accepted.');
+    }
     setAttachedMedia((prev) => [...prev, ...mediaFiles]);
+    // Allow re-selecting the same file.
+    event.target.value = '';
   };
 
   const removeMedia = (index) => {
@@ -488,27 +472,57 @@ const SocialDashboard = ({ user, reports = [] }) => {
 
     setIsProcessing(true);
     setComposerError('');
-    const optimisticPost = createLocalPost();
-    persistLocalPost(optimisticPost);
-    setPosts((prev) => [optimisticPost, ...prev.filter((entry) => entry.id !== optimisticPost.id)]);
     const postText = newPost;
     const mediaToClear = attachedMedia;
     const liveContext = liveSession;
     const geolocation = await getCurrentPosition();
     setNewPost('');
     setAttachedMedia([]);
-    triggerBurst(optimisticPost.id);
+    // No optimistic local-only feed entry: a draft is not a published post.
 
     try {
+      // Upload-first: every selected file goes to POST /api/upload/image
+      // (multipart). The post payload then carries only small persistent URLs.
+      const uploadedMedia = [];
+      for (const media of mediaToClear) {
+        if (media.file) {
+          const formData = new FormData();
+          formData.append('image', media.file);
+          const uploadRes = await fetch(`${feedService.apiBaseUrl}/upload/image`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          });
+          const uploadBody = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok || !uploadBody.success) {
+            throw new Error(uploadBody.message || `Media upload failed (${uploadRes.status})`);
+          }
+          uploadedMedia.push({
+            type: media.type,
+            url: uploadBody.data.url,
+            name: media.name,
+            mimeType: media.mimeType,
+          });
+        } else if (media.url && !media.url.startsWith('blob:') && !media.url.startsWith('data:')) {
+          uploadedMedia.push({
+            type: media.type,
+            url: media.url,
+            name: media.name,
+            mimeType: media.mimeType,
+          });
+        }
+        // blob:/data: preview-only entries without a File handle are dropped —
+        // they cannot be persisted and must never reach the JSON payload.
+      }
+
+      if (mediaToClear.length > 0 && uploadedMedia.length === 0) {
+        throw new Error('Media upload failed: no files could be stored. Please retry without attachments or try again.');
+      }
+
       const payload = {
         description: postText.trim(),
-        images: mediaToClear.filter((media) => media.type === 'image').map((media) => media.url),
-        media: mediaToClear.map((media) => ({
-          type: media.type,
-          url: media.url,
-          name: media.name,
-          mimeType: media.mimeType
-        })),
+        images: uploadedMedia.filter((media) => media.type === 'image').map((media) => media.url),
+        media: uploadedMedia,
         signalSource: liveContext?.isLive ? 'command' : 'social',
         isLive: Boolean(liveContext?.isLive),
         proofOfPresence: Boolean(liveContext?.proofOfPresence),
@@ -530,7 +544,11 @@ const SocialDashboard = ({ user, reports = [] }) => {
 
       const result = await feedService.createPost(payload, token);
       if (!result.success) {
-        setComposerError('Backend unavailable. Post saved locally in the feed.');
+        // Honest failure: nothing was published. Keep the text as a retryable
+        // draft (composer restored) and never insert a local-only entry into
+        // the live feed as if it were server-backed.
+        setNewPost(postText);
+        setComposerError(`Publish failed: ${result.error}. Your text was restored — fix the issue and retry.`);
       } else {
         const createdPost = normalizePost({
           ...result.data.report,
@@ -541,16 +559,17 @@ const SocialDashboard = ({ user, reports = [] }) => {
             verifiedReporter: activeUser?.verifiedReporter ?? result.data.report.user?.verifiedReporter
           }
         });
-        removeLocalPost(optimisticPost.id);
         setPosts((prev) => [createdPost, ...prev.filter((item) => item.id !== createdPost.id)]);
+        triggerBurst(createdPost.id);
+        syncUserReputation(liveContext?.isLive ? REWARD_RULES.livePost : REWARD_RULES.post);
+        spawnFloatingEffect(createdPost.id, liveContext?.isLive ? '+Live Signal' : '+Posted', 'text-emerald-500');
       }
 
-      syncUserReputation(liveContext?.isLive ? REWARD_RULES.livePost : REWARD_RULES.post);
-      spawnFloatingEffect(optimisticPost.id, liveContext?.isLive ? '+Live Signal' : '+Posted', 'text-emerald-500');
       setLiveSession(null);
     } catch (error) {
       console.error('Error creating post:', error);
-      setComposerError('Network issue detected. Post saved locally in the feed.');
+      setNewPost(postText);
+      setComposerError(`Publish failed: ${error.message || 'network error'}. Your text was restored — retry when connected.`);
     } finally {
       setIsProcessing(false);
     }
@@ -830,9 +849,9 @@ const SocialDashboard = ({ user, reports = [] }) => {
           </button>
         </div>
 
-        {composerError && composerError.includes('locally') && (
+        {composerError && (
           <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            This post is only on this device right now. Cross-device visibility on the deployed beta still needs persistent server storage behind the Netlify function.
+            {composerError} Nothing was published as a local-only post.
           </div>
         )}
 
@@ -1112,9 +1131,8 @@ const SocialDashboard = ({ user, reports = [] }) => {
                   <div key={index} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-2 hover:bg-theme-muted">
                     <span className="min-w-0 truncate font-medium text-theme-primary">{topic.tag}</span>
                     <div className="flex shrink-0 items-center space-x-2">
-                      <span className="text-sm text-theme-secondary">{topic.count.toLocaleString()}</span>
-                      {topic.trend === 'up' && <span className="text-xs text-green-500">+</span>}
-                      {topic.trend === 'down' && <span className="text-xs text-red-500">-</span>}
+                      {topic.trend === 'up' && <span className="text-xs text-green-500">↑</span>}
+                      {topic.trend === 'down' && <span className="text-xs text-red-500">↓</span>}
                     </div>
                   </div>
                 ))}

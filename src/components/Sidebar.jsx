@@ -35,10 +35,10 @@ function Sidebar({ user, isAuthenticated, onLogout, onNavigate, onToggleCommandM
               </button>
             </div>
             <nav className="space-y-5 text-green-100">
-              <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Dashboard</button>
+              <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Connect Worlds</button>
               <button onClick={() => { onToggleCommandMode?.(); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-emerald-200 hover:text-white">Command Mode</button>
               <button onClick={() => { onNavigate('/submit'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Report Event</button>
-              <button onClick={() => { onNavigate('/'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
+              <button onClick={() => { onNavigate('/social'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
               <button onClick={() => { onNavigate('/marketplace'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
               <button onClick={() => { onNavigate('/amber-alerts'); onMobileMenuToggle?.(); }} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
             </nav>
@@ -73,10 +73,10 @@ function Sidebar({ user, isAuthenticated, onLogout, onNavigate, onToggleCommandM
         <div className="relative z-10 space-y-10 p-6">
           <Brand />
           <nav className="space-y-5 text-green-100">
-            <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Dashboard</button>
+            <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Connect Worlds</button>
             <button onClick={() => onToggleCommandMode?.()} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-emerald-200 hover:text-white">Command Mode</button>
             <button onClick={() => onNavigate('/submit')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Report Event</button>
-            <button onClick={() => onNavigate('/')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
+            <button onClick={() => onNavigate('/social')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Social Feed</button>
             <button onClick={() => onNavigate('/marketplace')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left hover:text-white">Marketplace</button>
             <button onClick={() => onNavigate('/amber-alerts')} className="block w-full cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-red-300 hover:text-white">AMBER Alerts</button>
           </nav>

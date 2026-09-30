@@ -6,8 +6,14 @@ import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
+function isMongoReady() { return mongoose.connection.readyState === 1; }
+function dbUnavailable(res) {
+  return res.status(503).json({ error: 'Service temporarily unavailable — database not connected.', code: 'DATABASE_UNAVAILABLE' });
+}
+
 // Get comments for a report (public)
 router.get('/:reportId', async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const comments = await Comment.find({ report: req.params.reportId })
       .sort({ createdAt: -1 })
@@ -21,6 +27,7 @@ router.get('/:reportId', async (req, res) => {
 
 // Add a comment (protected)
 router.post('/:reportId', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const { text } = req.body;
     if (!text || text.trim() === '') {
@@ -58,8 +65,9 @@ router.post('/:reportId', protect, async (req, res) => {
   }
 });
 
-// Delete a comment (optional – only owner or admin)
+// Delete a comment
 router.delete('/:commentId', protect, async (req, res) => {
+  if (!isMongoReady()) return dbUnavailable(res);
   try {
     const comment = await Comment.findById(req.params.commentId);
     if (!comment) {

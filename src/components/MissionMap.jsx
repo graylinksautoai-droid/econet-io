@@ -103,6 +103,32 @@ const normalizeMission = (mission, index) => ({
   region: mission.region || 'Mission Zone'
 });
 
+/**
+ * Spread missions that share identical coordinates so markers don't stack
+ * exactly on top of each other. A small spiral offset is applied per
+ * duplicate so each marker remains individually selectable.
+ */
+const spreadDuplicateCoords = (missions) => {
+  const seen = new Map();
+  return missions.map((m) => {
+    const key = `${m.coordinates[0].toFixed(4)},${m.coordinates[1].toFixed(4)}`;
+    const count = seen.get(key) || 0;
+    seen.set(key, count + 1);
+    if (count === 0) return m;
+    // Each duplicate gets a small spiral offset (~200–600m) so markers are
+    // individually selectable without moving them far from the real location.
+    const angle = (count * 137.5 * Math.PI) / 180; // golden-angle spiral
+    const radius = 0.004 * Math.sqrt(count);        // ~400m per step
+    return {
+      ...m,
+      coordinates: [
+        m.coordinates[0] + radius * Math.cos(angle),
+        m.coordinates[1] + radius * Math.sin(angle)
+      ]
+    };
+  });
+};
+
 const createToast = (title, message) => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   title,
@@ -153,7 +179,7 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
   const watchIdRef = useRef(null);
 
   const normalizedMissions = useMemo(
-    () => missions.map((mission, index) => normalizeMission(mission, index)),
+    () => spreadDuplicateCoords(missions.map((mission, index) => normalizeMission(mission, index))),
     [missions]
   );
 
@@ -187,12 +213,23 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
     [missionState]
   );
 
+  const totalRewardPool = useMemo(
+    () => missionState.reduce((sum, mission) => sum + (mission.Reward_Points || 0), 0),
+    [missionState]
+  );
+
   const ecoBalance = user?.reputation?.ecoCoins || user?.reputation?.seeds || user?.ecoCoins || 0;
-  const currentDistance = selectedMission && userLocation
+  const missionHasCoords = Boolean(
+    selectedMission &&
+    Array.isArray(selectedMission.coordinates) &&
+    selectedMission.coordinates.length === 2 &&
+    selectedMission.coordinates.every((v) => typeof v === 'number' && Number.isFinite(v))
+  );
+  const currentDistance = missionHasCoords && userLocation
     ? haversineMeters(userLocation, selectedMission.coordinates)
     : null;
   const withinGeofence = Boolean(
-    selectedMission &&
+    missionHasCoords &&
     currentDistance != null &&
     currentDistance <= selectedMission.Geofence_Radius
   );
@@ -247,6 +284,17 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
     markersRef.current = [];
 
     missionState.forEach((mission) => {
+      // Skip missions that have no valid coordinates — they appear in the
+      // sidebar list but cannot be placed on the map. This is expected when
+      // canonical missions do not carry a coordinates field in targetCriteria.
+      if (
+        !Array.isArray(mission.coordinates) ||
+        mission.coordinates.length !== 2 ||
+        mission.coordinates.some((v) => typeof v !== 'number' || !Number.isFinite(v))
+      ) {
+        return;
+      }
+
       const element = document.createElement('button');
       element.type = 'button';
       element.className = getMarkerClass(mission.LILO_Status, mission.Mission_ID === selectedMissionId);
@@ -268,6 +316,14 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
 
   useEffect(() => {
     if (!mapRef.current || !selectedMission) return;
+    // Only fly to missions that have valid map coordinates.
+    if (
+      !Array.isArray(selectedMission.coordinates) ||
+      selectedMission.coordinates.length !== 2 ||
+      selectedMission.coordinates.some((v) => typeof v !== 'number' || !Number.isFinite(v))
+    ) {
+      return;
+    }
 
     mapRef.current.flyTo({
       center: selectedMission.coordinates,
@@ -326,7 +382,7 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
       )
     );
     setHandshakeState('verifying');
-    toast('LILO handshake', 'Satellite verification window opened. Hold position for orbital confirmation.');
+    toast('LILO handshake', 'Verification in progress. Hold your position inside the mission geofence.');
 
     try {
       await handshakeLILO();
@@ -362,9 +418,9 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
 
   const selectedIcon = selectedMission ? iconMap[selectedMission.icon] || <GiEcology /> : <GiEcology />;
   const statusLine = geoState === 'ready'
-    ? 'Orbital lock and geofence engine active'
+    ? 'Live position locked — geofence engine active'
     : geoState === 'locating'
-      ? 'Acquiring Sentinel position'
+      ? 'Acquiring device position'
       : geoError || 'Awaiting field coordinates';
 
   return (
@@ -392,32 +448,32 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
 
         <div className="mission-scorebar">
           <div className="mission-score">
-            <div className="mission-score-label">Regional Eco-Velocity</div>
-            <div className="mission-score-value">850 EC / HR</div>
+            <div className="mission-score-label">Active Missions</div>
+            <div className="mission-score-value">{missionCounts.active}</div>
           </div>
           <div className="mission-score">
-            <div className="mission-score-label">Hive Carbon Offset</div>
-            <div className="mission-score-value">2,450 Tons</div>
+            <div className="mission-score-label">Verified by LILO</div>
+            <div className="mission-score-value">{missionCounts.verified}</div>
           </div>
           <div className="mission-score">
-            <div className="mission-score-label">Total Leaves Awarded</div>
-            <div className="mission-score-value">1.2M</div>
+            <div className="mission-score-label">Reward Pool</div>
+            <div className="mission-score-value">{numberFormatter.format(totalRewardPool)} pts</div>
           </div>
         </div>
 
         <div className="mission-stage">
           <div className="mission-board">
             <aside className="mission-left-rail">
-              <h3 className="mission-rail-title">Sentinel Network</h3>
+              <h3 className="mission-rail-title">Mission Roster</h3>
               <div className="mission-sentinel-list">
-                {missionState.map((mission, index) => (
+                {missionState.map((mission) => (
                   <div key={mission.Mission_ID} className="mission-sentinel-card">
-                    <div className={`mission-sentinel-badge ${index === 2 ? 'mission-sentinel-badge--gold' : ''}`}>
-                      {index === 2 ? 'S' : 'G'}
+                    <div className={`mission-sentinel-badge ${mission.LILO_Status === 'Verified' ? 'mission-sentinel-badge--gold' : ''}`}>
+                      {(mission.Title || 'M').charAt(0).toUpperCase()}
                     </div>
                     <div className="mission-sentinel-copy">
-                      <strong>{index === 2 ? 'Gamer Tag' : 'Gamer Tag'}</strong>
-                      <span>@{mission.Mission_ID.toLowerCase()}</span>
+                      <strong>{mission.Title}</strong>
+                      <span>{mission.region} · {mission.LILO_Status}</span>
                     </div>
                   </div>
                 ))}
@@ -453,9 +509,19 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
               <div className="mission-panel">
                 <h3 className="mission-panel-title">Lilo Live Activity Log</h3>
                 <div className="mission-log-lines">
-                  <div>* Analyzing report 442...</div>
-                  <div>* Calculating EcoCoin reward for current mission...</div>
-                  <div>* Verifying orbital sync window...</div>
+                  <div>* {geoState === 'ready'
+                    ? 'Live position locked'
+                    : geoState === 'locating'
+                      ? 'Acquiring device position…'
+                      : geoError || 'Position unavailable on this device'}</div>
+                  <div>* {acceptedMissionId
+                    ? `Mission ${acceptedMissionId} is in your field queue`
+                    : 'No mission accepted yet'}</div>
+                  <div>* {handshakeState === 'verifying'
+                    ? 'LILO verification in progress…'
+                    : selectedMission
+                      ? `${selectedMission.Title} selected — awaiting field action`
+                      : 'Select a mission node to begin'}</div>
                 </div>
               </div>
 
@@ -473,12 +539,16 @@ const MissionMap = ({ missions = DEFAULT_MISSIONS, initialCenter = DEFAULT_CENTE
                   <FaRobot />
                 </div>
                 <div>
-                  <h3 className="mission-panel-title">Sentinel-Link Metadata HUD</h3>
+                  <h3 className="mission-panel-title">Mission Telemetry</h3>
                   <div className="mission-lilo-stats">
-                    <div><strong>Orbiting Sentinel:</strong> LILO / PX</div>
-                    <div><strong>Resolution:</strong> 10m / px</div>
-                    <div><strong>Cloud Cover:</strong> 12%</div>
-                    <div><strong>Coordinates:</strong> {selectedMission ? `${selectedMission.coordinates[1].toFixed(3)}, ${selectedMission.coordinates[0].toFixed(3)}` : 'Pending'}</div>
+                    <div><strong>Region:</strong> {selectedMission?.region || 'Unavailable'}</div>
+                    <div><strong>Geofence:</strong> {selectedMission ? `${numberFormatter.format(selectedMission.Geofence_Radius)} m` : 'Unavailable'}</div>
+                    <div><strong>LILO Status:</strong> {selectedMission?.LILO_Status || 'Unavailable'}</div>
+                    <div><strong>Coordinates:</strong> {
+                      selectedMission && Array.isArray(selectedMission.coordinates) && selectedMission.coordinates.length === 2
+                        ? `${selectedMission.coordinates[1].toFixed(3)}, ${selectedMission.coordinates[0].toFixed(3)}`
+                        : 'Unavailable'
+                    }</div>
                     <div><strong>User Lock:</strong> {geoState === 'ready' ? 'Confirmed' : 'Pending'}</div>
                   </div>
                 </div>

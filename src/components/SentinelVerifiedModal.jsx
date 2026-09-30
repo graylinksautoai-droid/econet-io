@@ -155,11 +155,11 @@ function SentinelVerifiedModal({ isOpen, onClose }) {
             </p>
           </div>
 
-          {/* Verified badge with haptic-style shake */}
+          {/* Submitted badge — explicitly NOT a verification claim */}
           <AnimatePresence>
             {showBadge && (
               <motion.div
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/20 border border-emerald-400/50 mb-4"
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/15 border border-amber-400/50 mb-4"
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{
                   scale: 1,
@@ -176,8 +176,8 @@ function SentinelVerifiedModal({ isOpen, onClose }) {
                 }}
               >
                 <SentinelShield size="md" />
-                <span className="text-emerald-300 font-bold text-lg tracking-wide">
-                  Verified
+                <span className="text-amber-200 font-bold text-lg tracking-wide">
+                  Submitted — Evidence Unverified
                 </span>
               </motion.div>
             )}
@@ -192,7 +192,8 @@ function SentinelVerifiedModal({ isOpen, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
               >
-                Identity Confirmed. Sentinel Data Integrated.
+                Report saved for review. Classification is not verification — no verified badge,
+                trust reward, or emergency dispatch was granted.
               </motion.p>
             )}
           </AnimatePresence>

@@ -1,3 +1,9 @@
+// Load environment variables FIRST — before any module that reads process.env
+// at import time (CanonicalPersistenceConfig, DevAuthStore, etc.).
+// 'dotenv/config' runs dotenv.config() synchronously as a side-effect import,
+// ensuring the .env file is loaded before any downstream module evaluation.
+import 'dotenv/config';
+
 import express from "express";
 import { createServer } from "http"; // 👈 Added for Socket.io
 import { Server } from "socket.io"; // 👈 Added for Socket.io
@@ -19,42 +25,98 @@ import mapRoutes from './routes/map.js';
 import notificationRoutes, { initVapid } from './routes/notifications.js';
 import validationQueue from './queues/validationQueue.js';
 import marketplaceRoutes from './routes/marketplace.js';
+import paymentsRoutes from './routes/payments.js';
 import profileRoutes from './routes/profile.js';
 import uploadRoutes from './routes/upload.js';
 import healthRoutes from './routes/health.js';
 import regionRoutes from './routes/region.js';
+import liloRoutes   from './routes/lilo.js';
+import weatherRoutes from './routes/weather.js';
+import chatRoutes from './routes/chat.js';
+// ─── Canonical API v2 routes ──────────────────────────────────────────────────
+import missionsV2Routes from './routes/v2/missions.js';
+import communitiesV2Routes from './routes/v2/communities.js';
+import simulationV2Routes from './routes/v2/simulation.js';
+import economyRoutes from './routes/economy.js';
 
 dotenv.config();
 
-// Check for required environment variables
+// GROQ_API_KEY is required only for LILO AI analysis (/analyze-report).
+// We warn on startup when it is absent but do NOT terminate the process —
+// all other routes (auth, reports, map, missions, etc.) must remain available
+// even when the LILO AI key is not configured.
 if (!process.env.GROQ_API_KEY) {
-  console.error(" GROQ_API_KEY is missing in .env file!");
-  process.exit(1);
+  console.warn(
+    '[server] GROQ_API_KEY is not set. ' +
+    'The /analyze-report endpoint will return 503 until the key is provided. ' +
+    'All other routes are unaffected.'
+  );
 }
 
 const WEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
-// Connect to MongoDB with TLS options
-mongoose.connect(process.env.MONGODB_URI, {
-  tls: true,
-  tlsAllowInvalidCertificates: true,
-  retryWrites: true,
-  w: 'majority'
-})
-  .then(() => console.log(" Connected to MongoDB"))
-  .catch(err => {
-    console.error(" MongoDB connection error:", err.message);
-    process.exit(1);
-  });
+// Connect to MongoDB.
+// In production, a failed connection is fatal — all legacy routes (auth, reports,
+// map, profile) depend on MongoDB. The process exits so the orchestrator can restart
+// with the correct environment.
+// During local development, if MONGODB_URI is absent, a warning is printed and the
+// server starts without legacy MongoDB routes so Vite + canonical v2 routes work.
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI, {
+    // Do NOT set tls:true or tlsAllowInvalidCertificates — the Atlas SRV URI
+    // enables TLS automatically. Forcing these options causes an OpenSSL TLS
+    // alert (error 80) on Node.js 24 / OpenSSL 3.x.
+    retryWrites: true,
+    w: 'majority',
+    // M0 free clusters can take up to 30s to wake from auto-pause.
+    serverSelectionTimeoutMS: 45000,
+    socketTimeoutMS: 45000,
+    heartbeatFrequencyMS: 10000,
+    maxPoolSize: 10,
+    // Force IPv4 to avoid ETIMEDOUT on IPv6 interfaces
+    family: 4
+  })
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch(err => {
+      console.error('❌ MongoDB connection error:', err.message);
+      if (process.env.NODE_ENV === 'production') {
+        console.error('Exiting — MongoDB is required in production.');
+        process.exit(1);
+      } else {
+        console.warn(
+          '[server] MongoDB unavailable. Legacy routes (auth/reports/profile/map) will return 503. ' +
+          'Canonical v2 routes and Lilo AI analysis remain available.'
+        );
+      }
+    });
+} else {
+  console.warn(
+    '[server] MONGODB_URI is not set. ' +
+    'Legacy routes requiring MongoDB will return 503. ' +
+    'Set MONGODB_URI to enable full functionality.'
+  );
+}
 
 const app = express();
 const httpServer = createServer(app); //  Wrap express app in HTTP server
 
+// Allowed CORS origins — shared by Express and Socket.io.
+// FRONTEND_URL can be set in the environment to add a production frontend.
+const allowedOrigins = [
+  'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176',
+  'http://127.0.0.1:61337', 'http://localhost:61337', 'http://127.0.0.1:49617', 'http://127.0.0.1:49618',
+  'https://econet.netlify.app',
+  'https://www.econet.netlify.app',
+];
+if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL)) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
 // Socket.io Configuration
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://127.0.0.1:61337', 'http://localhost:61337', 'http://127.0.0.1:49617', 'http://127.0.0.1:49618'],
+    origin: allowedOrigins,
     credentials: true
   }
 });
@@ -64,22 +126,35 @@ app.set('socketio', io);
 
 io.on("connection", (socket) => {
   console.log(" Sentinel Node Connected:", socket.id);
+  // Allow clients to join a specific chat conversation room for real-time delivery.
+  socket.on("chat:join", (conversationId) => {
+    if (typeof conversationId === 'string' && conversationId.length < 200) {
+      socket.join(`chat:${conversationId}`);
+    }
+  });
+  socket.on("chat:leave", (conversationId) => {
+    if (typeof conversationId === 'string') socket.leave(`chat:${conversationId}`);
+  });
   socket.on("disconnect", () => console.log(" Node Offline"));
 });
 
-// CORS configuration
+// CORS configuration — allowlist includes local dev ports + known production origins.
+// Set FRONTEND_URL in the environment to add a custom production frontend origin.
 const corsOptions = {
-  origin: [
-    'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176',
-    'http://127.0.0.1:61337', 'http://localhost:61337', 'http://127.0.0.1:49617', 'http://127.0.0.1:49618',
-    'https://econet.netlify.app',
-    'https://www.econet.netlify.app',
-  ],
+  origin: allowedOrigins,
   credentials: true,
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json());
+// The Paystack webhook requires the EXACT raw body for HMAC-SHA512 signature
+// verification, so it must receive express.raw() before express.json() runs.
+// Only this one path gets the raw parser — global body security is unchanged.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
+// Increase limit to 10mb to accommodate social posts that embed image data.
+// The canonical fix is to upload images separately via /api/upload/image, but
+// the current frontend sends base64 inline. 10mb covers typical images.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -90,7 +165,8 @@ if (!fs.existsSync(uploadsDir)) {
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Groq client is created lazily inside the /analyze-report handler so that
+// a missing GROQ_API_KEY only fails that specific route, not the whole server.
 
 // ===== HELPER FUNCTIONS (UNCHANGED) =====
 function extractLocation(text) {
@@ -109,30 +185,9 @@ function parseLocation(locationStr) {
   return result;
 }
 
-async function geocodeLocation(locationText) {
-  if (!WEATHER_API_KEY) return null;
-  try {
-    const response = await axios.get(`https://api.openweathermap.org/geo/1.0/direct`, {
-      params: { q: locationText, limit: 1, appid: WEATHER_API_KEY }
-    });
-    return response.data.length > 0 ? { lat: response.data[0].lat, lon: response.data[0].lon } : null;
-  } catch (error) { return null; }
-}
-
-async function getWeatherData(lat, lon) {
-  if (!WEATHER_API_KEY) return null;
-  try {
-    const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
-      params: { lat, lon, appid: WEATHER_API_KEY, units: 'metric' }
-    });
-    return response.data;
-  } catch (error) { return null; }
-}
-
-async function checkSatelliteData(category, lat, lon) {
-  if (category !== 'Fire') return null;
-  return { fireDetected: Math.random() > 0.5 };
-}
+// Weather helpers moved to routes/weather.js (wired to GET /api/weather).
+// The previous checkSatelliteData() fabricated results with Math.random() and
+// has been removed — EcoNet never simulates satellite verification.
 
 async function searchNews(query) {
   if (!NEWS_API_KEY) return [];
@@ -160,22 +215,44 @@ app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/map', mapRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/payments', paymentsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/region', regionRoutes);
+app.use('/api/weather', weatherRoutes);
 app.use('/health', healthRoutes);
 
 initVapid();
 app.use('/api/notifications', notificationRoutes);
 
+// ─── Canonical API v2 ─────────────────────────────────────────────────────────
+app.use('/api/v2/missions', missionsV2Routes);
+app.use('/api/v2/communities', communitiesV2Routes);
+app.use('/api/v2/simulation', simulationV2Routes);
+app.use('/api/economy', economyRoutes);
+app.use('/api/lilo', liloRoutes);
+app.use('/api/chat', chatRoutes);
+
 app.post("/analyze-report", async (req, res) => {
+  // Guard: this route requires GROQ_API_KEY; other routes remain available without it.
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(503).json({
+      error: "AI analysis unavailable",
+      message: "GROQ_API_KEY is not configured on this server. Report submission still works; AI classification is disabled."
+    });
+  }
+
+  // Lazy initialisation — client is only created when the key is present and the
+  // route is actually called. This prevents a startup crash when the key is absent.
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
   try {
     const { description } = req.body;
     if (!description) return res.status(400).json({ error: "Description is required" });
 
     console.log("📝 Analyzing:", description.substring(0, 50) + "...");
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "qwen/qwen3.8-27b",
       messages: [
         {
           role: "system",
@@ -219,12 +296,56 @@ app.post("/analyze-report", async (req, res) => {
 
   } catch (error) {
     console.error("========== GROQ ERROR ==========");
+    console.error("Status:", error.status || error.statusCode || 'unknown');
+    console.error("Message:", error.message?.substring(0, 200));
     res.status(500).json({ error: "AI analysis failed" });
   }
 });
 
+import { seedDevMissions } from './canonical/engines.js';
+
+/**
+ * Idempotent catalog seed — runs only when MongoDB is available and the
+ * marketplace_products collection is empty. Never deletes existing records.
+ */
+async function seedCatalogIfEmpty() {
+  try {
+    // Only run when the legacy Mongoose connection is live (same connection
+    // used by the marketplace routes).
+    if (mongoose.connection.readyState !== 1) return;
+
+    const { default: Product } = await import('./models/Product.js');
+    const count = await Product.countDocuments();
+    if (count > 0) return; // already seeded
+
+    const CATALOG = [
+      { slug: 'mixed-fruits',        name: 'Mixed Fruits',                seller: 'EcoFarms NG',           category: 'produce',   description: 'Seasonal mixed fruits sourced from verified eco-farms.',                                       priceMinor: 250000,  image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=400&q=70', stock: 50 },
+      { slug: 'organic-vegetables',  name: 'Organic Vegetables',          seller: 'GreenLeaf Farms',       category: 'produce',   description: 'Pesticide-free vegetables grown using sustainable methods.',                                    priceMinor: 180000,  image: 'https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=400&q=70', stock: 40 },
+      { slug: 'local-honey',         name: 'Local Honey',                 seller: 'BeeFarm Nigeria',       category: 'produce',   description: 'Pure honey from community-owned beehives in rural Nigeria.',                                   priceMinor: 350000,  image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400&q=70', stock: 30 },
+      { slug: 'solar-lantern',       name: 'Solar Lantern',               seller: 'SunPower NG',           category: 'renewable', description: 'Portable solar-charged lantern, 8 hour run time. Off-grid communities.',                        priceMinor: 1500000, image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400&q=70', stock: 25 },
+      { slug: 'water-purifier',      name: 'Water Purification Tablets',  seller: 'CleanWater Initiative', category: 'renewable', description: '50-tablet pack. Treats up to 50 litres of drinking water.',                                    priceMinor: 80000,   image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&q=70', stock: 100 },
+      { slug: 'tree-seedlings',      name: 'Tree Seedling Pack (×10)',    seller: 'GreenNation',           category: 'renewable', description: 'Ten native tree seedlings for reforestation and climate missions.',                             priceMinor: 120000,  image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=70', stock: 200 },
+    ];
+
+    for (const item of CATALOG) {
+      await Product.findOneAndUpdate(
+        { slug: item.slug },
+        { $setOnInsert: { ...item, currency: 'NGN', active: true, createdAt: new Date() } },
+        { upsert: true, new: false }
+      );
+    }
+    console.log(`[server] Marketplace catalog seeded: ${CATALOG.length} products.`);
+  } catch (err) {
+    console.warn('[server] Catalog seed skipped (non-fatal):', err.message);
+  }
+}
+
 // ✅ USE httpServer.listen instead of app.listen
-httpServer.listen(5000, () => {
+httpServer.listen(5000, async () => {
   console.log("✅ EcoNet server running on http://localhost:5000");
   console.log("📡 Real-time Sentinel Mesh Active");
+  // Seed dev missions after server starts (dotenv is loaded by this point)
+  await seedDevMissions();
+  // Seed catalog after mongoose connects — use a delayed check
+  setTimeout(() => seedCatalogIfEmpty().catch(() => {}), 5000);
 });

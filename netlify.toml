@@ -2,6 +2,14 @@
   command = "npm run build"
   publish = "dist"
 
+# ── API routing ───────────────────────────────────────────────────────────────
+# All /api/* requests are proxied to the Netlify serverless function.
+# This function handles auth, reports, and map data using Netlify Blobs.
+#
+# If a separate Express backend is deployed (Railway/Render/VPS), set
+# VITE_API_URL in the Netlify dashboard environment variables to point to it,
+# e.g. https://econet-api.railway.app — the runtimeConfig.js fallback to
+# /.netlify/functions/api is only used when VITE_API_URL is not set.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
@@ -14,6 +22,10 @@
 
 [build.environment]
   NODE_VERSION = "20.19.0"
+  # VITE_API_URL is intentionally not set here — it is injected via the
+  # Netlify dashboard "Site configuration → Environment variables" so that
+  # the value is kept out of source control.
+  # When not set, runtimeConfig.js falls back to /.netlify/functions/api.
 
 [[headers]]
   for = "/*"
@@ -21,6 +33,7 @@
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
 
 [functions]
   directory = "netlify/functions"

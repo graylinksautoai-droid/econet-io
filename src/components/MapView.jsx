@@ -17,7 +17,7 @@ const mapPopupStyles = `
   }
 `;
 
-const MapView = ({ activeIncident, reports = [] }) => {
+const MapView = ({ activeIncident, reports = [], initialCenter = null }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const activePopup = useRef(null); // Keep track of open popups
@@ -380,7 +380,7 @@ const MapView = ({ activeIncident, reports = [] }) => {
             source: 'osm'
           }]
         },
-        center: [7.4951, 9.0579], // Abuja, Nigeria [longitude, latitude]
+        center: initialCenter || [7.4951, 9.0579], // Abuja default, overridden by initialCenter
         zoom: 10,
         minZoom: 2,
         maxZoom: 20
