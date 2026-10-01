@@ -1,11 +1,14 @@
 # Frontend Dockerfile
-FROM node:18-alpine AS frontend
+FROM node:20-alpine AS frontend
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci --only=production
+
+# Install all dependencies (including Vite in devDependencies)
+ENV NODE_ENV=development
+RUN npm ci
 
 # Copy source code
 COPY . .
