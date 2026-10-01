@@ -15,7 +15,7 @@ services:
     # Build from server/Dockerfile, not the root Dockerfile (which is the
     # local-dev nginx frontend image and has no backend runtime).
     dockerfilePath: ./server/Dockerfile
-    dockerContext: ./server
+    dockerContext: .
     # Render injects PORT automatically; server/index.js reads process.env.PORT.
     envVars:
       - key: NODE_ENV
