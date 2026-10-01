@@ -341,8 +341,10 @@ async function seedCatalogIfEmpty() {
 }
 
 // ✅ USE httpServer.listen instead of app.listen
-httpServer.listen(5000, async () => {
-  console.log("✅ EcoNet server running on http://localhost:5000");
+// Render (and other PaaS) inject $PORT. Fall back to 5000 for local dev.
+const PORT = parseInt(process.env.PORT, 10) || 5000;
+httpServer.listen(PORT, async () => {
+  console.log(`✅ EcoNet server running on port ${PORT}`);
   console.log("📡 Real-time Sentinel Mesh Active");
   // Seed dev missions after server starts (dotenv is loaded by this point)
   await seedDevMissions();
