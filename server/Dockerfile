@@ -1,16 +1,18 @@
 # Backend Dockerfile
 #
-# BUILD CONTEXT: repo root (not ./server)
-# The server imports modules from repo-root directories:
-#   ../../engines/      (canonical domain engines)
-#   ../../infrastructure/ (persistence, messaging, idempotency)
-# These live outside server/ so the Docker build context must be the repo
-# root to make them available. The Dockerfile then installs and runs from
-# the server/ subdirectory.
+# BUILD CONTEXT: repo root  (render.yaml: dockerContext: .)
 #
-# render.yaml sets:
-#   dockerfilePath: ./server/Dockerfile
-#   dockerContext:  .                    ← repo root
+# Why the build context must be the repo root:
+#   server/ imports from two repo-root directories at runtime:
+#     /app/infrastructure/  (CanonicalMongoConnection, EventBus, IdempotencyManager)
+#     /app/engines/         (MissionEngine, CommunityEngine, AuditEngine, ...)
+#   These are outside server/ and must be present in the container.
+#
+# Why we run npm ci twice:
+#   1. At /app       — installs root package.json deps (mongoose etc.) into
+#                      /app/node_modules so Node can resolve them when
+#                      /app/infrastructure/* and /app/engines/* import 'mongoose'.
+#   2. At /app/server — installs the Express server's own production deps.
 
 FROM node:22-alpine
 
@@ -23,13 +25,19 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy the entire repo so ../../engines/ and ../../infrastructure/ are
-# accessible to the server at runtime.
-# node_modules, .env*, .git, dist and test files are excluded by the root
-# .dockerignore, so only source is copied.
+# Copy full repo into /app (node_modules, .env*, .git, dist excluded by
+# the root .dockerignore).
 COPY . .
 
-# Install server production dependencies from the server/ sub-package.
+# ── Step 1: install root-level deps ──────────────────────────────────────────
+# The repo root package.json lists mongoose (and other packages) that are
+# imported by /app/infrastructure/ and /app/engines/ at runtime.
+# Node resolves bare specifiers by walking up from the importing file, so
+# mongoose imported from /app/infrastructure/persistence/CanonicalMongoConnection.js
+# needs to be in /app/node_modules/ — not only in /app/server/node_modules/.
+RUN npm ci --omit=dev
+
+# ── Step 2: install server deps ───────────────────────────────────────────────
 WORKDIR /app/server
 RUN npm ci --omit=dev
 
@@ -41,5 +49,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:${PORT:-5000}/ || exit 1
 
-# node index.js reads process.env.PORT (injected by Render) || 5000
+# WORKDIR is /app/server; node index.js resolves to /app/server/index.js
 CMD ["node", "index.js"]
