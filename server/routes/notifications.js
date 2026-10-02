@@ -7,6 +7,10 @@ const router = express.Router();
 
 // Initialize VAPID – call this function from index.js after dotenv.config()
 export function initVapid() {
+  if (!process.env.VAPID_SUBJECT || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    console.warn('[notifications] VAPID env vars not set — push notifications disabled. Set VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY to enable.');
+    return;
+  }
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT,
     process.env.VAPID_PUBLIC_KEY,
