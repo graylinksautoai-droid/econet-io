@@ -213,7 +213,7 @@ export default function FeedCard({
           {report.images && report.images.length > 0 && (
             <div className="relative group">
               <img 
-                src={report.images[0].startsWith('http') ? report.images[0] : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${report.images[0]}`} 
+                src={report.images[0].startsWith('http') ? report.images[0] : `${import.meta.env.VITE_API_URL?.replace(/\/$/, '') || ''}${report.images[0]}`} 
                 alt="Report image" 
                 className="w-full h-64 object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => {

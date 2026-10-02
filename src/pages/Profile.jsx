@@ -240,6 +240,9 @@ function Profile({ onLogout, onNavigate }) {
               </button>
             </div>
             {error && <p className="text-red-400 text-xs text-center max-w-[160px]">{error}</p>}
+            <p className="text-[10px] text-center max-w-[160px]" style={{ color: 'var(--eco-text-muted)' }}>
+              Avatar is stored on the server. It may reset after a backend redeploy.
+            </p>
           </div>
 
           {/* Identity summary */}

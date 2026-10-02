@@ -105,7 +105,7 @@ function CreateCommunityForm({ onCreated, onCancel, token }) {
     e.preventDefault();
     setError('');
     const v2 = getV2ApiOrigin();
-    if (!v2) { setError('API unavailable'); return; }
+    if (!v2) { setError('Communities require the Render backend. Set VITE_API_URL in the Netlify dashboard.'); return; }
     setLoading(true);
     try {
       const res = await fetch(`${v2}/api/v2/communities`, {
@@ -260,7 +260,11 @@ export default function Communities({ onNavigate }) {
 
   // Load communities
   const loadCommunities = useCallback(async () => {
-    if (!v2) { setError('Community API unavailable on this deployment.'); setLoading(false); return; }
+    if (!v2) {
+      setError('Communities require the Render backend. Set VITE_API_URL in the Netlify dashboard to your Render backend URL.');
+      setLoading(false);
+      return;
+    }
     setError('');
     try {
       const res = await fetch(`${v2}/api/v2/communities`);

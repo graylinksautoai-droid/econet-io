@@ -37,7 +37,10 @@ export default function Login({ onNavigate }) {
       await login({ email, password }, { remember });
       if (remember) localStorage.setItem('rememberedEmail', email);
       else localStorage.removeItem('rememberedEmail');
-      onNavigate('/');
+      // Redirect to the originally requested page, or home
+      const redirect = sessionStorage.getItem('loginRedirect') || '/';
+      sessionStorage.removeItem('loginRedirect');
+      onNavigate(redirect);
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

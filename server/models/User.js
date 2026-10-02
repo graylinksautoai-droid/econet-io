@@ -27,6 +27,9 @@ const userSchema = new mongoose.Schema({
   goldBadge: { type: Boolean, default: false },
   verifiedReporter: { type: Boolean, default: false },
   role: { type: String, enum: ['user', 'reporter', 'authority', 'admin'], default: 'user' },
+  // Password reset fields — populated by /api/auth/forgot-password, cleared on use
+  passwordResetToken:   { type: String, default: null },
+  passwordResetExpires: { type: Date,   default: null },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   settings: {

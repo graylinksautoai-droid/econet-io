@@ -44,8 +44,15 @@ import Chat          from './pages/Chat';
 import UnifiedButton from './components/UnifiedButton';
 import SentinelLive  from './components/SentinelLive';
 
-const AUTH_PATHS   = ['/login', '/register', '/forgot-password'];
+const AUTH_PATHS   = ['/login', '/register', '/forgot-password', '/reset-password'];
 const ROLE_PATH    = '/role';
+// Routes that require authentication — unauthenticated users are redirected to /login
+const PROTECTED_PATHS = [
+  '/hq', '/social', '/reports', '/map', '/communities', '/command',
+  '/marketplace', '/submit', '/profile', '/edit-profile', '/settings',
+  '/amber-alerts', '/simulation', '/wallet', '/toolkit', '/carbon',
+  '/chat', '/setup-2fa', '/change-password'
+];
 
 function AppRouter() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
@@ -77,6 +84,22 @@ function AppRouter() {
   const isAuthPage = AUTH_PATHS.includes(currentPath);
   const isRolePage = currentPath === ROLE_PATH;
 
+  // ── Authentication guard ──────────────────────────────────────────────────
+  // Protected routes require a logged-in user. Redirect to /login when:
+  //   - there is no authenticated user, AND
+  //   - the current path is not an auth page or the role-selection page
+  const isProtectedPath = PROTECTED_PATHS.includes(currentPath) ||
+    (!isAuthPage && !isRolePage && currentPath !== '/');
+
+  useEffect(() => {
+    if (!user && isProtectedPath) {
+      // Preserve the intended destination for post-login redirect
+      sessionStorage.setItem('loginRedirect', currentPath);
+      window.history.replaceState({}, '', '/login');
+      setCurrentPath('/login');
+    }
+  }, [user, currentPath, isProtectedPath]);
+
   const renderPage = () => {
     // Role-selection: shown when no role is chosen yet (first visit or after logout)
     if (currentPath === ROLE_PATH || (!role && currentPath === '/')) {
@@ -88,6 +111,7 @@ function AppRouter() {
       case '/login':         return <Login onNavigate={navigate} />;
       case '/register':      return <Register onNavigate={navigate} />;
       case '/forgot-password': return <ForgotPassword onNavigate={navigate} />;
+      case '/reset-password':  return <ForgotPassword onNavigate={navigate} mode="reset" />;
 
       // Primary destinations
       case '/':

@@ -242,4 +242,147 @@ router.get('/verify', async (req, res) => {
   }
 });
 
+/* ─── Forgot Password ─────────────────────────────────────────────────────── */
+
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('Valid email is required')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return err(res, 400, 'VALIDATION_ERROR', errors.array()[0].msg);
+  }
+
+  const { email } = req.body;
+
+  // DEV_AUTH: no email available, return a dev-friendly message
+  if (devAuth.enabled) {
+    devHeaders(res);
+    return res.json({
+      message: 'Password reset not available in dev mode. Use the dev login credentials directly.',
+      devMode: true
+    });
+  }
+
+  if (!isMongoReady()) {
+    return err(res, 503, 'DATABASE_UNAVAILABLE', 'Authentication service unavailable.');
+  }
+
+  try {
+    const { default: User }  = await import('../models/User.js');
+    const { default: crypto } = await import('crypto');
+    const nodemailer = await import('nodemailer');
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    // Always respond with the same message whether the user exists or not —
+    // prevents email enumeration attacks.
+    if (!user) {
+      return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+
+    // Generate a cryptographically secure token, store hashed, expire in 1h
+    const rawToken    = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    user.passwordResetToken   = hashedToken;
+    user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+    await user.save({ validateBeforeSave: false });
+
+    // Construct reset URL — use FRONTEND_URL env var or fall back to request origin
+    const frontendOrigin = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const resetUrl = `${frontendOrigin}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    // Send email if credentials are configured
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.warn('[auth/forgot-password] EMAIL_USER/EMAIL_PASS not set — reset token generated but email not sent.');
+      // In development: log the URL so it can be used manually
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[auth/forgot-password] DEV reset URL:', resetUrl);
+      }
+      return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+
+    const transporter = nodemailer.default.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+    });
+
+    await transporter.sendMail({
+      from: `"EcoNet IO" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: 'Reset your EcoNet password',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px">
+          <h2 style="color:#22c55e">Reset your EcoNet password</h2>
+          <p>You requested a password reset. Click the link below to set a new password.
+             This link expires in <strong>1 hour</strong>.</p>
+          <p style="margin:24px 0">
+            <a href="${resetUrl}"
+               style="background:#22c55e;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">
+              Reset password
+            </a>
+          </p>
+          <p style="color:#666;font-size:12px">
+            If you didn't request this, ignore this email — your password won't change.
+          </p>
+        </div>
+      `
+    });
+
+    return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+  } catch (e) {
+    console.error('[auth/forgot-password]', e.message);
+    return err(res, 500, 'EMAIL_FAILED', 'Could not send reset email. Try again later.');
+  }
+});
+
+/* ─── Reset Password ─────────────────────────────────────────────────────── */
+
+router.post('/reset-password', [
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return err(res, 400, 'VALIDATION_ERROR', errors.array()[0].msg);
+  }
+
+  if (devAuth.enabled) {
+    devHeaders(res);
+    return err(res, 400, 'DEV_MODE', 'Password reset not available in dev mode.');
+  }
+
+  if (!isMongoReady()) {
+    return err(res, 503, 'DATABASE_UNAVAILABLE', 'Authentication service unavailable.');
+  }
+
+  try {
+    const { default: User }  = await import('../models/User.js');
+    const { default: crypto } = await import('crypto');
+
+    const { token: rawToken, email, password } = req.body;
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      passwordResetToken:   hashedToken,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return err(res, 400, 'TOKEN_INVALID', 'Reset token is invalid or has expired.');
+    }
+
+    user.password             = password;
+    user.passwordResetToken   = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    return res.json({ message: 'Password updated. You can now sign in with your new password.' });
+  } catch (e) {
+    console.error('[auth/reset-password]', e.message);
+    return err(res, 500, 'RESET_FAILED', 'Password reset failed. Try again.');
+  }
+});
+
 export default router;

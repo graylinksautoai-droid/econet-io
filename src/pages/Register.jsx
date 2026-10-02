@@ -4,6 +4,7 @@
  * Backend: POST /api/auth/register
  */
 import { useState } from 'react';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { API_ENDPOINTS } from '../services/api.js';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +12,7 @@ export default function Register({ onNavigate }) {
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
@@ -59,7 +61,6 @@ export default function Register({ onNavigate }) {
             {[
               { id: 'name',     label: 'Full name',    type: 'text',     val: name,     set: setName,     ph: 'Your name',       auto: 'name' },
               { id: 'email',    label: 'Email',        type: 'email',    val: email,    set: setEmail,    ph: 'you@example.com', auto: 'email' },
-              { id: 'password', label: 'Password',     type: 'password', val: password, set: setPassword, ph: '••••••••',         auto: 'new-password' },
             ].map(f => (
               <div key={f.id}>
                 <label htmlFor={f.id} className="block text-xs font-medium mb-1.5"
@@ -72,6 +73,33 @@ export default function Register({ onNavigate }) {
                 />
               </div>
             ))}
+
+            {/* Password with visibility toggle */}
+            <div>
+              <label htmlFor="password" className="block text-xs font-medium mb-1.5"
+                style={{ color: 'var(--eco-text-secondary)' }}>Password</label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-white placeholder:text-[var(--eco-text-muted)] outline-none transition-all"
+                  style={{ background: 'var(--eco-bg-elevated)', border: '1px solid var(--eco-border)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute inset-y-0 right-3 flex items-center"
+                  style={{ color: 'var(--eco-text-muted)' }}
+                >
+                  {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
+                </button>
+              </div>
+            </div>
 
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}

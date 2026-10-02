@@ -1,12 +1,30 @@
+/**
+ * runtimeConfig.js — canonical API URL resolver for EcoNet frontend.
+ *
+ * Resolution order:
+ *  1. VITE_API_URL env var (set in Netlify dashboard for production,
+ *     or locally in .env for development)
+ *  2. localhost fallback for local dev
+ *  3. /.netlify/functions/api fallback for Netlify deployments without
+ *     a Render backend configured
+ *
+ * For production Netlify deploys: set VITE_API_URL in the Netlify dashboard
+ * to your Render backend URL, e.g. https://econet-api.onrender.com
+ * Do NOT hardcode it in .env (that file is committed to the repo).
+ */
+
 export function getApiBaseUrl() {
-  const envUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const envUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, '');
   if (envUrl) {
+    // Already ends with /api — use as-is
     if (envUrl.endsWith('/api') || envUrl.includes('/.netlify/functions/api')) {
       return envUrl;
     }
+    // Bare origin (e.g. https://econet-api.onrender.com) — append /api
     return `${envUrl}/api`;
   }
 
+  // Local development fallback
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
@@ -14,58 +32,48 @@ export function getApiBaseUrl() {
     }
   }
 
+  // Netlify deployment without VITE_API_URL configured — use serverless function.
+  // NOTE: v2 routes (missions, communities) are NOT available here.
+  // Set VITE_API_URL in the Netlify dashboard to enable full functionality.
   return '/.netlify/functions/api';
 }
 
 export function getApiOrigin() {
   const base = getApiBaseUrl();
-
   if (base.includes('/.netlify/functions/api')) {
-    return base.replace(/\/\.netlify\/functions\/api$/, '');
+    return typeof window !== 'undefined' ? window.location.origin : '';
   }
-
   return base.replace(/\/api$/, '');
 }
 
 export function resolveMediaUrl(src) {
   if (!src) return '';
   if (/^(https?:|data:|blob:)/i.test(src)) return src;
-
   const origin = getApiOrigin();
-  if (!src.startsWith('/')) {
-    return `${origin}/${src}`;
-  }
-
+  if (!src.startsWith('/')) return `${origin}/${src}`;
   return `${origin}${src}`;
 }
 
 /**
- * Returns the base URL for canonical API v2 endpoints, or null when the
- * current deployment does not support them.
+ * Returns the base URL for canonical v2 API endpoints (/api/v2/*).
  *
- * Canonical v2 routes (/api/v2/*) are served exclusively by the Express
- * backend. The Netlify Functions deployment does NOT implement these routes;
- * calling them on Netlify would produce a malformed URL or a 404.
+ * v2 routes are served ONLY by the Express backend (Render).
+ * They are NOT available through Netlify functions.
  *
  * Returns:
- *  - string  — the v2 base URL (e.g. "http://localhost:5000") when the
- *              Express backend is reachable.
- *  - null    — when the current deployment is Netlify Functions and v2
- *              routes are therefore unavailable.
- *
- * Callers must treat null as "v2 not available on this deployment" and show
- * an appropriate state rather than making a request with a malformed URL.
+ *  - string  — the v2 origin (e.g. "https://econet-api.onrender.com") when
+ *              VITE_API_URL points to the Express backend.
+ *  - null    — when VITE_API_URL is unset and the fallback is Netlify functions.
+ *              Callers must handle null gracefully and show an informative state.
  */
 export function getV2ApiOrigin() {
   const base = getApiBaseUrl();
 
-  // Netlify Functions deployment — v2 routes are NOT served here.
-  // Return null so callers know to skip the fetch entirely.
+  // Netlify Functions path — v2 routes not available.
   if (base.includes('/.netlify/functions/api')) {
     return null;
   }
 
-  // Express server: strip the trailing /api segment to get the origin.
-  // e.g. "http://localhost:5000/api" → "http://localhost:5000"
+  // Express backend — strip /api suffix to get the origin.
   return base.replace(/\/api$/, '');
 }

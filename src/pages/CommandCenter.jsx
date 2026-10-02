@@ -433,7 +433,7 @@ const CommandCenter = ({ user, onNavigate }) => {
         setMissions(DEV_FIXTURE_MISSIONS);
         setStatus('ready');
       } else {
-        setErrorMsg('Canonical mission data is not available on this deployment.');
+        setErrorMsg('Mission data requires the Render backend. Set VITE_API_URL in the Netlify dashboard to your Render backend URL (e.g. https://econet-api.onrender.com).');
         setStatus('error');
       }
       return;
